@@ -32,12 +32,12 @@ try:
 except ImportError:
     CURL_CFFI_AVAILABLE = False
 
-# Playwright: real headless browser fallback
+# undetected_chromedriver: specifically engineered to bypass Cloudflare
 try:
-    from playwright.sync_api import sync_playwright
-    PLAYWRIGHT_AVAILABLE = True
+    import undetected_chromedriver as uc
+    UC_AVAILABLE = True
 except ImportError:
-    PLAYWRIGHT_AVAILABLE = False
+    UC_AVAILABLE = False
 
 # Plain requests: last resort (often blocked by Cloudflare)
 import requests as std_requests
@@ -268,40 +268,24 @@ def _scrape_with_curl_cffi(url: str) -> Optional[float]:
         return None
 
 
-def _scrape_with_playwright(url: str) -> Optional[float]:
-    """Uses the real installed Chrome browser — much harder for sites to detect."""
-    with sync_playwright() as p:
-        # channel="chrome" uses the user's actual Chrome installation,
-        # which has a genuine browser fingerprint unlike headless Chromium.
+def _scrape_with_undetected_chrome(url: str) -> Optional[float]:
+    """
+    undetected_chromedriver patches Chrome at the binary level to hide all
+    automation signals that Cloudflare looks for. Most reliable option.
+    """
+    try:
+        options = uc.ChromeOptions()
+        options.add_argument("--lang=en-AU")
+        driver = uc.Chrome(headless=True, options=options, use_subprocess=True)
         try:
-            browser = p.chromium.launch(headless=True, channel="chrome")
-        except Exception:
-            browser = p.chromium.launch(headless=True)  # fall back if Chrome not found
-        try:
-            context = browser.new_context(
-                locale="en-AU",
-                timezone_id="Australia/Sydney",
-            )
-            page = context.new_page()
-            # networkidle waits until all JS+API calls finish loading
-            page.goto(url, wait_until="networkidle", timeout=45_000)
-            page.wait_for_timeout(2_000)
-
-            price_el = page.locator("[itemprop='price']").first
-            if price_el.count() > 0:
-                content = price_el.get_attribute("content")
-                if content:
-                    try:
-                        return float(content.replace(",", ""))
-                    except ValueError:
-                        pass
-
-            return _extract_price_from_html(page.content())
-        except Exception as exc:
-            logging.warning("  Playwright error: %s", exc)
-            return None
+            driver.get(url)
+            time.sleep(4)  # let JS render prices
+            return _extract_price_from_html(driver.page_source)
         finally:
-            browser.close()
+            driver.quit()
+    except Exception as exc:
+        logging.warning("  undetected-chromedriver error: %s", exc)
+        return None
 
 
 def _scrape_with_requests(url: str, session: std_requests.Session) -> Optional[float]:
@@ -323,13 +307,13 @@ def scrape_bunnings_price(url: str, session: std_requests.Session) -> Optional[f
         price = _scrape_with_curl_cffi(url)
         if price is not None:
             return price
-        logging.warning("  curl_cffi found no price — trying Playwright...")
+        logging.warning("  curl_cffi found no price — trying undetected Chrome...")
 
-    if PLAYWRIGHT_AVAILABLE:
-        price = _scrape_with_playwright(url)
+    if UC_AVAILABLE:
+        price = _scrape_with_undetected_chrome(url)
         if price is not None:
             return price
-        logging.warning("  Playwright found no price — trying plain requests...")
+        logging.warning("  undetected Chrome found no price — trying plain requests...")
 
     return _scrape_with_requests(url, session)
 
@@ -342,8 +326,8 @@ def run(spreadsheet_path: Path, test_mode: bool = False) -> None:
         sys.exit(1)
 
     engines = []
-    if CURL_CFFI_AVAILABLE:  engines.append("curl_cffi")
-    if PLAYWRIGHT_AVAILABLE: engines.append("Playwright")
+    if CURL_CFFI_AVAILABLE: engines.append("curl_cffi")
+    if UC_AVAILABLE:        engines.append("undetected-chrome")
     engines.append("requests")
 
     logging.info("=" * 65)
