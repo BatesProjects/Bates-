@@ -340,7 +340,7 @@ def main() -> None:
         if candidate.exists():
             spreadsheet_path = candidate
 
-    log_file = spreadsheet_path.parent / "price_updater.log"
+    log_file = Path.home() / "Desktop" / "price_updater.log"
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s  %(levelname)-8s  %(message)s",
