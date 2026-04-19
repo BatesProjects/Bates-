@@ -102,11 +102,9 @@ def save_workbook(wb: openpyxl.Workbook, spreadsheet_path: Path) -> Path:
 
 
 def clean_url(url: str) -> str:
-    """Keep ?store= for correct local pricing; strip all other tracking params."""
+    """Strip all query parameters — keeps the bare product URL."""
     parsed = urlparse(url)
-    params = parse_qs(parsed.query, keep_blank_values=True)
-    kept   = {k: v for k, v in params.items() if k == "store"}
-    return urlunparse(parsed._replace(query=urlencode(kept, doseq=True), fragment=""))
+    return urlunparse(parsed._replace(query="", fragment=""))
 
 
 def _length_from_url(url: str) -> Optional[float]:
@@ -144,7 +142,7 @@ def _find_price_in_json(data: Any, depth: int = 0) -> Optional[float]:
         return None
     if isinstance(data, dict):
         # Check high-priority keys first
-        for key in ("sellPrice", "currentPrice", "nowPrice", "wasPrice", "price"):
+        for key in ("comparisonUnitPrice", "sellPrice", "currentPrice", "nowPrice", "wasPrice", "price"):
             val = data.get(key)
             if val is not None and not isinstance(val, (dict, list)):
                 try:
