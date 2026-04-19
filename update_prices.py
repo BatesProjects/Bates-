@@ -65,7 +65,9 @@ BROWSER_HEADERS = {
 
 def backup_spreadsheet(path: Path) -> Path:
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    backup = path.parent / f"{path.stem}_backup_{timestamp}{path.suffix}"
+    backup_dir = Path.home() / "Desktop" / "Price Book Backups"
+    backup_dir.mkdir(exist_ok=True)
+    backup = backup_dir / f"{path.stem}_backup_{timestamp}{path.suffix}"
     shutil.copy2(path, backup)
     logging.info("Backup saved: %s", backup)
     return backup
