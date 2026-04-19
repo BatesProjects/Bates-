@@ -1,0 +1,249 @@
+============================================================
+  BUNNINGS PRICE UPDATER — SETUP & USER GUIDE
+  Plain English instructions (no developer knowledge needed)
+============================================================
+
+WHAT THIS DOES
+──────────────
+Every two weeks, this script:
+  • Opens your PriceBook.xlsx
+  • Saves a backup copy (so you never lose your data)
+  • Visits every Bunnings URL in Column B of the Quote sheet
+  • Updates Column E with the live price from the Bunnings website
+  • Highlights any row YELLOW if the price has changed
+  • Highlights any row RED if the page couldn't be reached (and
+    leaves the old price untouched)
+  • Updates Column G with today's date for every row it checked
+  • Writes a full log of every check into the "Price Change Log" tab
+
+
+────────────────────────────────────────────────────────────
+STEP 1 — COPY THE FILES TO YOUR MAC
+────────────────────────────────────────────────────────────
+Put all four of these files into the same folder on your Mac.
+A good place is your Desktop or a folder called "PriceTool".
+
+  update_prices.py   ← the main script
+  setup_mac.sh       ← the one-time setup helper
+  requirements.txt   ← list of tools the script needs
+  SETUP.txt          ← this file
+
+Your PriceBook.xlsx can be in the same folder, or anywhere
+else on your Mac — you'll be asked where it is during setup.
+
+
+────────────────────────────────────────────────────────────
+STEP 2 — INSTALL PYTHON 3 (only needed once)
+────────────────────────────────────────────────────────────
+Python is the language the script is written in. You need to
+install it before anything else.
+
+  1. Open Safari and go to:  https://www.python.org/downloads/
+  2. Click the big yellow button "Download Python 3.x.x"
+  3. Open the .pkg file that downloads
+  4. Click through the installer (all the defaults are fine)
+  5. When it finishes, close the installer
+
+To check Python installed correctly:
+  1. Open "Terminal" (press Cmd+Space, type Terminal, press Enter)
+  2. Type:  python3 --version
+  3. Press Enter — you should see something like "Python 3.12.3"
+
+
+────────────────────────────────────────────────────────────
+STEP 3 — RUN THE ONE-TIME SETUP
+────────────────────────────────────────────────────────────
+This installs the supporting tools and sets up the automatic
+two-week schedule.
+
+  1. Open Terminal (Cmd+Space → "Terminal" → Enter)
+  2. Type the word  cd  followed by a space
+  3. Drag the folder containing your files onto the Terminal window
+     (this fills in the path for you)
+  4. Press Enter
+  5. Type:  bash setup_mac.sh
+  6. Press Enter and follow the prompts
+
+The script will ask you where PriceBook.xlsx is.
+Either press Enter (if it's in the same folder), or type the
+full path to the file.
+
+When it finishes you'll see "Setup complete!" — you're done.
+The script will now run automatically every two weeks.
+
+
+────────────────────────────────────────────────────────────
+STEP 4 — TEST IT ON 5 ROWS FIRST (recommended)
+────────────────────────────────────────────────────────────
+Before running on your whole spreadsheet, it's worth testing
+on just the first 5 URLs to make sure everything works.
+
+  1. Open Terminal
+  2. Navigate to your folder (step 3 above, points 2–4)
+  3. Type:
+       python3 update_prices.py --test PriceBook.xlsx
+     (If your PriceBook.xlsx is in a different folder, replace
+      "PriceBook.xlsx" with the full path to your file)
+  4. Press Enter
+
+You'll see live output as it checks each URL.
+When it's done, open PriceBook.xlsx and check:
+  • Column E has been updated
+  • Changed prices are highlighted yellow
+  • Any failures are highlighted red
+  • The "Price Change Log" tab has a new entry for each row
+
+Once you're happy with the test, let me know and I'll confirm
+before running it on the full spreadsheet.
+
+
+────────────────────────────────────────────────────────────
+STEP 5 — RUN ON THE FULL SPREADSHEET
+────────────────────────────────────────────────────────────
+When you're satisfied the test worked:
+
+  1. Open Terminal and navigate to your folder
+  2. Type:
+       python3 update_prices.py PriceBook.xlsx
+  3. Press Enter
+
+Depending on how many URLs you have, this may take several
+minutes (the script pauses briefly between each request to
+avoid overwhelming the Bunnings website).
+
+
+────────────────────────────────────────────────────────────
+UNDERSTANDING THE OUTPUT
+────────────────────────────────────────────────────────────
+While the script runs you'll see lines like:
+
+  2024-06-10 09:12:34  INFO     Row 3 | https://www.bunnings...
+  2024-06-10 09:12:36  INFO       => $24.98  (was $22.50)  [CHANGED]
+
+  2024-06-10 09:12:38  INFO     Row 4 | https://www.bunnings...
+  2024-06-10 09:12:40  INFO       => $5.45  (was $5.45)  [UNCHANGED]
+
+  2024-06-10 09:12:42  WARNING  Row 5 | https://www.bunnings...
+  2024-06-10 09:12:44  WARNING    => FAILED  Row 5 highlighted RED
+
+A full copy of this output is also saved to price_updater.log
+in the same folder — useful for reviewing what changed.
+
+
+────────────────────────────────────────────────────────────
+UNDERSTANDING THE SPREADSHEET CHANGES
+────────────────────────────────────────────────────────────
+After each run:
+
+  Column E  — updated with the latest price from Bunnings
+  Column G  — shows the date the price was last checked
+  Yellow row — the price is different from last time
+  Red row    — the website couldn't be reached; old price kept
+  No colour  — price was checked and hasn't changed
+
+The "Price Change Log" tab grows with each run, giving you
+a full history: old price, new price, the difference in dollars,
+and the date of each check.
+
+
+────────────────────────────────────────────────────────────
+BACKUP FILES
+────────────────────────────────────────────────────────────
+Before making any changes, the script always saves a backup
+in the same folder as PriceBook.xlsx. Backup files are named:
+
+  PriceBook_backup_20240610_091234.xlsx
+
+You can safely delete old backups if they are piling up.
+
+
+────────────────────────────────────────────────────────────
+IF BUNNINGS BLOCKS THE SCRAPER
+────────────────────────────────────────────────────────────
+Bunnings uses security software (Cloudflare) that can sometimes
+detect automated scripts and block them. Signs this is happening:
+
+  • Many rows suddenly turn red in the same run
+  • The log shows "possibly blocked by Cloudflare"
+  • The log shows HTTP error 403 or 429
+
+WORKAROUND OPTIONS (in order of ease):
+
+  Option A — Slow the script down
+  ─────────────────────────────
+  Open update_prices.py in TextEdit.
+  Find the line:  DELAY_SECONDS  = 2
+  Change 2 to a higher number, e.g. 5 or 10, then save and retry.
+
+  Option B — Run the test at a different time of day
+  ──────────────────────────────────────────────────
+  Cloudflare restrictions can vary by time. Try running the
+  script early in the morning or late at night.
+
+  Option C — Install Playwright (headless browser)
+  ─────────────────────────────────────────────────
+  Playwright makes the script use a real, invisible web browser
+  instead of plain HTTP requests — much harder to block.
+  Contact me and I can upgrade the script to use Playwright.
+
+  Option D — Use a VPN
+  ─────────────────────
+  A VPN changes your IP address, which can bypass blocks.
+  Popular Mac VPN options: Mullvad, ProtonVPN (both have free tiers).
+
+
+────────────────────────────────────────────────────────────
+THE AUTOMATIC TWO-WEEK SCHEDULE
+────────────────────────────────────────────────────────────
+The setup_mac.sh script activates macOS's built-in task
+scheduler (called launchd) to run update_prices.py every
+1,209,600 seconds (exactly 14 days) from when you ran setup.
+
+  • Your Mac does NOT need to be on at a specific time.
+  • If your Mac was asleep when the two weeks elapsed, the
+    script will run the next time the Mac wakes up.
+  • The script runs silently in the background — you won't see
+    a window open. Check price_updater.log afterward to see
+    what happened.
+
+To stop the schedule:
+  Open Terminal and run:
+    launchctl unload ~/Library/LaunchAgents/com.bates.priceupdater.plist
+
+To restart it:
+  Open Terminal and run:
+    launchctl load ~/Library/LaunchAgents/com.bates.priceupdater.plist
+
+
+────────────────────────────────────────────────────────────
+QUICK REFERENCE — TERMINAL COMMANDS
+────────────────────────────────────────────────────────────
+All commands are typed in Terminal. Navigate to your folder
+first (drag-folder trick from Step 3).
+
+  Test 5 URLs only:
+    python3 update_prices.py --test PriceBook.xlsx
+
+  Run on all rows:
+    python3 update_prices.py PriceBook.xlsx
+
+  View the log:
+    open price_updater.log
+
+  Stop auto-schedule:
+    launchctl unload ~/Library/LaunchAgents/com.bates.priceupdater.plist
+
+  Start auto-schedule again:
+    launchctl load ~/Library/LaunchAgents/com.bates.priceupdater.plist
+
+
+────────────────────────────────────────────────────────────
+NEED HELP?
+────────────────────────────────────────────────────────────
+If something isn't working, the most useful thing you can do
+is share the contents of price_updater.log — it contains a
+detailed record of what happened and any error messages.
+
+To open it:  double-click price_updater.log in Finder,
+             or open Terminal and type:  open price_updater.log
+============================================================
