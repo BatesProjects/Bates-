@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
 """
 Bunnings Price Updater
-Reads PriceBook.xlsx, scrapes live prices from Bunnings, and updates the spreadsheet.
+Reads Price Book.xlsx, scrapes live prices from Bunnings, and updates the spreadsheet.
 
 Usage:
-  python3 update_prices.py                        # Run on all rows
-  python3 update_prices.py --test                 # Test on first 5 URLs only
-  python3 update_prices.py /path/to/PriceBook.xlsx
-  python3 update_prices.py --test /path/to/PriceBook.xlsx
+  python3 update_prices.py "Price Book.xlsx"        # Run on all rows
+  python3 update_prices.py --test "Price Book.xlsx" # Test on first 5 URLs only
 """
 
 import argparse
@@ -26,27 +24,33 @@ from bs4 import BeautifulSoup
 import openpyxl
 from openpyxl.styles import PatternFill
 
-# ─── Configuration ─────────────────────────────────────────────────────────────
-# Change these if your sheet names or column positions differ.
+# Playwright is the preferred scraping engine (uses a real browser).
+# If not installed, the script falls back to plain HTTP requests.
+try:
+    from playwright.sync_api import sync_playwright
+    PLAYWRIGHT_AVAILABLE = True
+except ImportError:
+    PLAYWRIGHT_AVAILABLE = False
 
-QUOTE_SHEET_NAME = "Quote"            # Sheet that holds your price data
-LOG_SHEET_NAME   = "Price Change Log" # Sheet for the audit log
+# ─── Configuration ─────────────────────────────────────────────────────────────
+
+QUOTE_SHEET_NAME = "Quote"
+LOG_SHEET_NAME   = "Price Change Log"
 
 URL_COLUMN    = 2   # Column B — Bunnings product URLs
 PRICE_COLUMN  = 5   # Column E — unit price
 DATE_COLUMN   = 7   # Column G — date last checked
+DATA_START_ROW = 2  # Row 1 is the header row
 
-DATA_START_ROW = 2  # Row 1 is assumed to be the header row
-
-DELAY_SECONDS  = 2  # Polite pause between requests (increase if Bunnings blocks)
-TEST_LIMIT     = 5  # Number of rows processed in --test mode
+DELAY_SECONDS = 2   # Pause between requests (increase if still getting blocks)
+TEST_LIMIT    = 5   # URLs processed in --test mode
 
 # ─── Fill colours ──────────────────────────────────────────────────────────────
 YELLOW_FILL = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
 RED_FILL    = PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid")
 NO_FILL     = PatternFill(fill_type="none")
 
-# ─── HTTP headers — mimics a real Mac/Chrome browser ───────────────────────────
+# ─── Browser headers for the requests fallback ─────────────────────────────────
 BROWSER_HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -64,7 +68,7 @@ BROWSER_HEADERS = {
 # ─── Helpers ───────────────────────────────────────────────────────────────────
 
 def backup_spreadsheet(path: Path) -> Path:
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    timestamp  = datetime.now().strftime("%Y%m%d_%H%M%S")
     backup_dir = Path.home() / "Desktop" / "Price Book Backups"
     backup_dir.mkdir(exist_ok=True)
     backup = backup_dir / f"{path.stem}_backup_{timestamp}{path.suffix}"
@@ -73,14 +77,30 @@ def backup_spreadsheet(path: Path) -> Path:
     return backup
 
 
+def save_workbook(wb: openpyxl.Workbook, spreadsheet_path: Path) -> Path:
+    """Save workbook; if iCloud blocks the write, save to Desktop instead."""
+    try:
+        wb.save(spreadsheet_path)
+        logging.info("Saved: %s", spreadsheet_path)
+        return spreadsheet_path
+    except PermissionError:
+        fallback = Path.home() / "Desktop" / spreadsheet_path.name
+        wb.save(fallback)
+        logging.warning(
+            "iCloud blocked saving to the original location.\n"
+            "  Updated file saved to your Desktop: %s\n"
+            "  Please drag it back into your Price Book folder to replace the old one.",
+            fallback,
+        )
+        return fallback
+
+
 def highlight_row(ws, row_idx: int, fill: PatternFill) -> None:
     for col in range(1, ws.max_column + 1):
         ws.cell(row=row_idx, column=col).fill = fill
 
 
-def get_or_create_log_sheet(
-    wb: openpyxl.Workbook,
-) -> openpyxl.worksheet.worksheet.Worksheet:
+def get_or_create_log_sheet(wb: openpyxl.Workbook) -> openpyxl.worksheet.worksheet.Worksheet:
     if LOG_SHEET_NAME not in wb.sheetnames:
         ws = wb.create_sheet(LOG_SHEET_NAME)
         ws.append([
@@ -91,44 +111,14 @@ def get_or_create_log_sheet(
     return wb[LOG_SHEET_NAME]
 
 
-# ─── Bunnings scraping ─────────────────────────────────────────────────────────
+def _extract_price_from_html(html: str) -> Optional[float]:
+    """Parse price out of a fully-rendered HTML string."""
+    soup = BeautifulSoup(html, "html.parser")
 
-def _is_cloudflare_block(resp: requests.Response) -> bool:
-    if resp.status_code in (403, 429, 503):
-        return True
-    body_sample = resp.text[:2000]
-    return any(
-        phrase in body_sample
-        for phrase in ("Just a moment", "Checking your browser", "cf-browser-verification")
-    )
-
-
-def scrape_bunnings_price(url: str, session: requests.Session) -> Optional[float]:
-    """Return the current price from a Bunnings product page, or None on failure."""
-    try:
-        resp = session.get(url, headers=BROWSER_HEADERS, timeout=15)
-    except requests.RequestException as exc:
-        logging.warning("  Network error: %s", exc)
-        return None
-
-    if _is_cloudflare_block(resp):
-        logging.warning(
-            "  Bunnings returned %s — possibly blocked by Cloudflare. "
-            "Try increasing DELAY_SECONDS or see SETUP.txt for workarounds.",
-            resp.status_code,
-        )
-        return None
-
-    if not resp.ok:
-        logging.warning("  HTTP %s for %s", resp.status_code, url)
-        return None
-
-    soup = BeautifulSoup(resp.text, "html.parser")
-
-    # Method 1: JSON-LD structured data (<script type="application/ld+json">)
+    # Method 1: JSON-LD structured data
     for tag in soup.find_all("script", type="application/ld+json"):
         try:
-            data = json.loads(tag.string or "")
+            data  = json.loads(tag.string or "")
             items = data if isinstance(data, list) else [data]
             for item in items:
                 if item.get("@type") == "Product":
@@ -141,7 +131,7 @@ def scrape_bunnings_price(url: str, session: requests.Session) -> Optional[float
         except (json.JSONDecodeError, ValueError, TypeError):
             continue
 
-    # Method 2: Common Bunnings CSS selectors / microdata attributes
+    # Method 2: microdata / common Bunnings CSS selectors
     for selector in [
         "[itemprop='price']",
         "[data-locator='price-display']",
@@ -161,10 +151,10 @@ def scrape_bunnings_price(url: str, session: requests.Session) -> Optional[float
                 except ValueError:
                     pass
 
-    # Method 3: JavaScript variables embedded in the page
+    # Method 3: JavaScript variables in the page source
     for tag in soup.find_all("script"):
         text = tag.string or ""
-        if not any(k in text for k in ("sellPrice", "currentPrice", "\"price\"")):
+        if not any(k in text for k in ("sellPrice", "currentPrice", '"price"')):
             continue
         m = re.search(
             r'"(?:sellPrice|currentPrice|price)"\s*:\s*([\d]+(?:\.\d+)?)', text
@@ -177,17 +167,89 @@ def scrape_bunnings_price(url: str, session: requests.Session) -> Optional[float
             except ValueError:
                 pass
 
-    # Method 4: Broad $ price pattern search in the first 60 KB of HTML
-    for m in re.finditer(r'\$\s*([\d,]+\.\d{2})', resp.text[:60_000]):
-        try:
-            candidate = float(m.group(1).replace(",", ""))
-            if 0.01 <= candidate <= 100_000:
-                return candidate
-        except ValueError:
-            pass
-
-    logging.warning("  Could not find price on page.")
     return None
+
+
+# ─── Scraping ──────────────────────────────────────────────────────────────────
+
+def _scrape_with_playwright(url: str) -> Optional[float]:
+    """Use a real headless Chrome browser — bypasses Cloudflare / JS rendering."""
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        try:
+            context = browser.new_context(
+                user_agent=(
+                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/120.0.0.0 Safari/537.36"
+                ),
+                locale="en-AU",
+                timezone_id="Australia/Sydney",
+            )
+            page = context.new_page()
+            page.goto(url, wait_until="domcontentloaded", timeout=30_000)
+            page.wait_for_timeout(3_000)  # let JS finish rendering prices
+
+            # Try the microdata price attribute directly via the browser DOM
+            price_el = page.locator("[itemprop='price']").first
+            if price_el.count() > 0:
+                content = price_el.get_attribute("content")
+                if content:
+                    try:
+                        return float(content.replace(",", ""))
+                    except ValueError:
+                        pass
+
+            # Try other common selectors
+            for selector in [
+                "[data-testid='price-display']",
+                "[data-locator='price-display']",
+                ".price__value",
+                ".pdp-price__value",
+                "span[class*='Price']",
+            ]:
+                els = page.locator(selector)
+                if els.count() > 0:
+                    text = els.first.inner_text()
+                    m = re.search(r"[\d,]+\.\d{2}", text.replace("$", ""))
+                    if m:
+                        try:
+                            return float(m.group().replace(",", ""))
+                        except ValueError:
+                            pass
+
+            # Fall back to full HTML parse
+            return _extract_price_from_html(page.content())
+
+        except Exception as exc:
+            logging.warning("  Playwright error: %s", exc)
+            return None
+        finally:
+            browser.close()
+
+
+def _scrape_with_requests(url: str, session: requests.Session) -> Optional[float]:
+    """Plain HTTP fallback — may be blocked by Cloudflare."""
+    try:
+        resp = session.get(url, headers=BROWSER_HEADERS, timeout=15)
+    except requests.RequestException as exc:
+        logging.warning("  Network error: %s", exc)
+        return None
+
+    if resp.status_code in (403, 429, 503):
+        logging.warning("  Blocked (HTTP %s) — Cloudflare may be active.", resp.status_code)
+        return None
+    if not resp.ok:
+        logging.warning("  HTTP %s", resp.status_code)
+        return None
+
+    return _extract_price_from_html(resp.text)
+
+
+def scrape_bunnings_price(url: str, session: requests.Session) -> Optional[float]:
+    if PLAYWRIGHT_AVAILABLE:
+        return _scrape_with_playwright(url)
+    return _scrape_with_requests(url, session)
 
 
 # ─── Main logic ────────────────────────────────────────────────────────────────
@@ -195,13 +257,13 @@ def scrape_bunnings_price(url: str, session: requests.Session) -> Optional[float
 def run(spreadsheet_path: Path, test_mode: bool = False) -> None:
     if not spreadsheet_path.exists():
         logging.error("Spreadsheet not found: %s", spreadsheet_path)
-        logging.error("Check that PriceBook.xlsx is in the correct location and try again.")
         sys.exit(1)
 
     logging.info("=" * 65)
     logging.info("Bunnings Price Updater — %s", datetime.now().strftime("%Y-%m-%d %H:%M"))
     if test_mode:
         logging.info("TEST MODE  (first %d URLs only)", TEST_LIMIT)
+    logging.info("Scraping engine: %s", "Playwright (browser)" if PLAYWRIGHT_AVAILABLE else "requests (fallback)")
     logging.info("Spreadsheet: %s", spreadsheet_path)
     logging.info("=" * 65)
 
@@ -225,7 +287,6 @@ def run(spreadsheet_path: Path, test_mode: bool = False) -> None:
     success     = 0
     changed     = 0
     failed      = 0
-    block_count = 0
 
     for row_idx in range(DATA_START_ROW, ws.max_row + 1):
         url = ws.cell(row=row_idx, column=URL_COLUMN).value
@@ -246,12 +307,13 @@ def run(spreadsheet_path: Path, test_mode: bool = False) -> None:
         desc = ws.cell(row=row_idx, column=1).value or ""
         logging.info("Row %d | %s", row_idx, url[:80])
 
-        time.sleep(DELAY_SECONDS)
+        if not PLAYWRIGHT_AVAILABLE:
+            time.sleep(DELAY_SECONDS)
+
         new_price = scrape_bunnings_price(url, session)
 
         if new_price is None:
-            failed     += 1
-            block_count += 1
+            failed += 1
             highlight_row(ws, row_idx, RED_FILL)
             log_ws.append([
                 row_idx, str(desc), url,
@@ -259,17 +321,7 @@ def run(spreadsheet_path: Path, test_mode: bool = False) -> None:
                 today, "FAILED — could not retrieve price",
             ])
             logging.warning("  => FAILED  Row %d highlighted RED, existing price kept.", row_idx)
-
-            # Warn early if Bunnings looks like it is blocking us
-            if block_count >= 3:
-                logging.warning(
-                    "  3 consecutive failures detected. Bunnings may be blocking this "
-                    "script. See SETUP.txt section 'If Bunnings blocks the scraper' for "
-                    "workaround options."
-                )
-                block_count = 0
         else:
-            block_count = 0
             success += 1
             ws.cell(row=row_idx, column=PRICE_COLUMN).value = new_price
             ws.cell(row=row_idx, column=DATE_COLUMN).value  = today
@@ -298,49 +350,47 @@ def run(spreadsheet_path: Path, test_mode: bool = False) -> None:
             )
 
         if test_mode and url_count >= TEST_LIMIT:
-            logging.info("Test mode complete — processed %d URLs. Stopping here.", url_count)
+            logging.info("Test mode complete — processed %d URLs.", url_count)
             break
 
-    wb.save(spreadsheet_path)
+    save_workbook(wb, spreadsheet_path)
 
     logging.info("=" * 65)
     logging.info(
         "Done.  Checked: %d  |  Updated: %d  |  Changed: %d  |  Failed: %d",
         url_count, success, changed, failed,
     )
-    if failed > 0:
-        logging.warning(
-            "%d row(s) could not be updated and are highlighted RED. "
-            "See SETUP.txt for troubleshooting tips.",
-            failed,
-        )
-    logging.info("Saved: %s", spreadsheet_path)
     logging.info("=" * 65)
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Update Bunnings prices in PriceBook.xlsx"
-    )
+    parser = argparse.ArgumentParser(description="Update Bunnings prices in Price Book.xlsx")
     parser.add_argument(
         "spreadsheet",
         nargs="?",
-        default="PriceBook.xlsx",
-        help="Path to PriceBook.xlsx (default: PriceBook.xlsx in the same folder as this script)",
+        default="Price Book.xlsx",
+        help="Path to the spreadsheet (default: 'Price Book.xlsx' in current folder)",
     )
     parser.add_argument(
         "--test",
         action="store_true",
-        help=f"Test mode: only process the first {TEST_LIMIT} URLs, then stop",
+        help=f"Test mode: only process the first {TEST_LIMIT} URLs",
     )
     args = parser.parse_args()
 
     spreadsheet_path = Path(args.spreadsheet)
-    # If given a bare filename, look next to the script first
     if not spreadsheet_path.is_absolute() and not spreadsheet_path.exists():
         candidate = Path(__file__).parent / spreadsheet_path
         if candidate.exists():
             spreadsheet_path = candidate
+
+    if not PLAYWRIGHT_AVAILABLE:
+        print(
+            "\nNOTE: Playwright is not installed — using basic HTTP scraping.\n"
+            "If prices fail to load, install Playwright for better results:\n"
+            "  pip3 install playwright\n"
+            "  python3 -m playwright install chromium\n"
+        )
 
     log_file = Path.home() / "Desktop" / "price_updater.log"
     logging.basicConfig(
