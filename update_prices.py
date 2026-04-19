@@ -18,7 +18,7 @@ import time
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Optional
-from urllib.parse import urlparse, urlunparse
+from urllib.parse import urlparse, urlunparse, parse_qs, urlencode
 
 from bs4 import BeautifulSoup
 import openpyxl
@@ -102,9 +102,22 @@ def save_workbook(wb: openpyxl.Workbook, spreadsheet_path: Path) -> Path:
 
 
 def clean_url(url: str) -> str:
-    """Strip tracking/store query parameters — keeps the bare product URL."""
+    """Keep ?store= for correct local pricing; strip all other tracking params."""
     parsed = urlparse(url)
-    return urlunparse(parsed._replace(query="", fragment=""))
+    params = parse_qs(parsed.query, keep_blank_values=True)
+    kept   = {k: v for k, v in params.items() if k == "store"}
+    return urlunparse(parsed._replace(query=urlencode(kept, doseq=True), fragment=""))
+
+
+def _length_from_url(url: str) -> Optional[float]:
+    """Parse product length in metres from a Bunnings URL (e.g. '2-4m' → 2.4)."""
+    m = re.search(r'[_-](\d+)-(\d)m(?:[_?]|$)', url, re.IGNORECASE)
+    if m:
+        try:
+            return float(f"{m.group(1)}.{m.group(2)}")
+        except ValueError:
+            pass
+    return None
 
 
 def highlight_row(ws, row_idx: int, fill: PatternFill) -> None:
@@ -131,7 +144,7 @@ def _find_price_in_json(data: Any, depth: int = 0) -> Optional[float]:
         return None
     if isinstance(data, dict):
         # Check high-priority keys first
-        for key in ("comparisonUnitPrice", "sellPrice", "currentPrice", "nowPrice", "wasPrice", "price"):
+        for key in ("sellPrice", "currentPrice", "nowPrice", "wasPrice", "price"):
             val = data.get(key)
             if val is not None and not isinstance(val, (dict, list)):
                 try:
@@ -325,21 +338,31 @@ def _scrape_with_requests(url: str, session: std_requests.Session) -> Optional[f
 
 
 def scrape_bunnings_price(url: str, session: std_requests.Session, debug: bool = False) -> Optional[float]:
-    url = clean_url(url)  # Remove ?store=&gclid= tracking junk first
+    length   = _length_from_url(url)   # e.g. 2.4 from "2-4m" in the URL
+    url      = clean_url(url)          # keep ?store=, strip tracking junk
+
+    piece_price: Optional[float] = None
 
     if CURL_CFFI_AVAILABLE:
-        price = _scrape_with_curl_cffi(url, debug=debug)
-        if price is not None:
-            return price
-        logging.warning("  curl_cffi found no price — trying undetected Chrome...")
+        piece_price = _scrape_with_curl_cffi(url, debug=debug)
 
-    if UC_AVAILABLE:
-        price = _scrape_with_undetected_chrome(url)
-        if price is not None:
-            return price
-        logging.warning("  undetected Chrome found no price — trying plain requests...")
+    if piece_price is None and UC_AVAILABLE:
+        piece_price = _scrape_with_undetected_chrome(url)
 
-    return _scrape_with_requests(url, session)
+    if piece_price is None:
+        piece_price = _scrape_with_requests(url, session)
+
+    if piece_price is None:
+        return None
+
+    # If the URL contains a length (e.g. 2.4m), the scraped value is the
+    # total piece price — divide to get the per-linear-metre rate.
+    if length and length > 0:
+        per_lm = round(piece_price / length, 2)
+        logging.info("  Piece price $%.2f ÷ %.1fm = $%.2f/lm", piece_price, length, per_lm)
+        return per_lm
+
+    return piece_price
 
 
 # ─── Main logic ────────────────────────────────────────────────────────────────
