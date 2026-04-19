@@ -131,7 +131,7 @@ def _find_price_in_json(data: Any, depth: int = 0) -> Optional[float]:
         return None
     if isinstance(data, dict):
         # Check high-priority keys first
-        for key in ("sellPrice", "currentPrice", "nowPrice", "wasPrice", "price"):
+        for key in ("comparisonUnitPrice", "sellPrice", "currentPrice", "nowPrice", "wasPrice", "price"):
             val = data.get(key)
             if val is not None and not isinstance(val, (dict, list)):
                 try:
@@ -221,6 +221,7 @@ def _extract_price_from_html(html: str) -> Optional[float]:
 
     # Method 4: CSS selectors / microdata
     for selector in [
+        "[data-locator='product-price-comparison']",  # per-linear-metre price on Bunnings
         "[itemprop='price']",
         "[data-locator='price-display']",
         "[data-testid='price-display']",
