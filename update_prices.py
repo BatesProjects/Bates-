@@ -244,7 +244,26 @@ def _extract_price_from_html(html: str) -> Optional[float]:
 
 # ─── Scraping engines ──────────────────────────────────────────────────────────
 
-def _scrape_with_curl_cffi(url: str) -> Optional[float]:
+def _debug_response(html: str, url: str) -> None:
+    """Save full HTML to Desktop and print a diagnostic summary."""
+    debug_file = Path.home() / "Desktop" / "bunnings_debug.html"
+    debug_file.write_text(html, encoding="utf-8")
+    logging.info("  DEBUG: Full page HTML saved to %s", debug_file)
+
+    indicators = {
+        "Cloudflare challenge":   any(p in html for p in ("Just a moment", "cf-browser-verification", "Checking your browser")),
+        "Product name found":     any(p in html for p in ("Framing", "Treated Pine", "Blue Pine")),
+        "__NEXT_DATA__ present":  '__NEXT_DATA__' in html,
+        "Price symbol present":   "$" in html,
+        "itemprop=price present": 'itemprop="price"' in html or "itemprop='price'" in html,
+        "per linear metre":       "per linear metre" in html.lower(),
+    }
+    logging.info("  DEBUG indicators:")
+    for label, found in indicators.items():
+        logging.info("    %-30s %s", label, "YES" if found else "no")
+
+
+def _scrape_with_curl_cffi(url: str, debug: bool = False) -> Optional[float]:
     """
     Uses curl_cffi to mimic Chrome's exact TLS fingerprint.
     This is the most reliable way to bypass Cloudflare.
@@ -252,16 +271,20 @@ def _scrape_with_curl_cffi(url: str) -> Optional[float]:
     try:
         resp = cffi_requests.get(
             url,
-            impersonate="chrome120",
+            impersonate="chrome131",
             timeout=20,
             headers={"Accept-Language": "en-AU,en;q=0.9"},
         )
         if resp.status_code in (403, 429, 503):
             logging.warning("  Blocked (HTTP %s) even with curl_cffi.", resp.status_code)
+            if debug:
+                _debug_response(resp.text, url)
             return None
         if not resp.ok:
             logging.warning("  HTTP %s", resp.status_code)
             return None
+        if debug:
+            _debug_response(resp.text, url)
         return _extract_price_from_html(resp.text)
     except Exception as exc:
         logging.warning("  curl_cffi error: %s", exc)
@@ -300,11 +323,11 @@ def _scrape_with_requests(url: str, session: std_requests.Session) -> Optional[f
         return None
 
 
-def scrape_bunnings_price(url: str, session: std_requests.Session) -> Optional[float]:
+def scrape_bunnings_price(url: str, session: std_requests.Session, debug: bool = False) -> Optional[float]:
     url = clean_url(url)  # Remove ?store=&gclid= tracking junk first
 
     if CURL_CFFI_AVAILABLE:
-        price = _scrape_with_curl_cffi(url)
+        price = _scrape_with_curl_cffi(url, debug=debug)
         if price is not None:
             return price
         logging.warning("  curl_cffi found no price — trying undetected Chrome...")
@@ -320,7 +343,7 @@ def scrape_bunnings_price(url: str, session: std_requests.Session) -> Optional[f
 
 # ─── Main logic ────────────────────────────────────────────────────────────────
 
-def run(spreadsheet_path: Path, test_mode: bool = False) -> None:
+def run(spreadsheet_path: Path, test_mode: bool = False, debug: bool = False) -> None:
     if not spreadsheet_path.exists():
         logging.error("Spreadsheet not found: %s", spreadsheet_path)
         sys.exit(1)
@@ -376,7 +399,8 @@ def run(spreadsheet_path: Path, test_mode: bool = False) -> None:
         logging.info("Row %d | %s", row_idx, url[:80])
 
         time.sleep(DELAY_SECONDS)
-        new_price = scrape_bunnings_price(url, session)
+        # Only run debug on the very first URL (to avoid creating many files)
+        new_price = scrape_bunnings_price(url, session, debug=(debug and url_count == 1))
 
         if new_price is None:
             failed += 1
@@ -424,6 +448,8 @@ def main() -> None:
     parser.add_argument("spreadsheet", nargs="?", default="Price Book.xlsx")
     parser.add_argument("--test", action="store_true",
                         help=f"Only process first {TEST_LIMIT} URLs")
+    parser.add_argument("--debug", action="store_true",
+                        help="Save the raw HTML from the first URL to Desktop for diagnosis")
     args = parser.parse_args()
 
     spreadsheet_path = Path(args.spreadsheet)
@@ -443,7 +469,7 @@ def main() -> None:
         ],
     )
 
-    run(spreadsheet_path, test_mode=args.test)
+    run(spreadsheet_path, test_mode=args.test, debug=args.debug)
 
 
 if __name__ == "__main__":
