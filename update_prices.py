@@ -18,6 +18,7 @@ import time
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Optional
+from urllib.parse import urlparse, urlunparse
 
 from bs4 import BeautifulSoup
 import openpyxl
@@ -100,6 +101,12 @@ def save_workbook(wb: openpyxl.Workbook, spreadsheet_path: Path) -> Path:
         return fallback
 
 
+def clean_url(url: str) -> str:
+    """Strip tracking/store query parameters — keeps the bare product URL."""
+    parsed = urlparse(url)
+    return urlunparse(parsed._replace(query="", fragment=""))
+
+
 def highlight_row(ws, row_idx: int, fill: PatternFill) -> None:
     for col in range(1, ws.max_column + 1):
         ws.cell(row=row_idx, column=col).fill = fill
@@ -148,6 +155,22 @@ def _find_price_in_json(data: Any, depth: int = 0) -> Optional[float]:
 def _extract_price_from_html(html: str) -> Optional[float]:
     """Try every known method to pull a price out of Bunnings page HTML."""
     soup = BeautifulSoup(html, "html.parser")
+
+    # Method 0: Per-linear-metre price (e.g. "$6.94 per linear metre")
+    # Bunnings timber products show two prices — we want the per-lm one.
+    lm_match = re.search(
+        r'\$\s*([\d,]+\.?\d*)\s*per\s+li(?:n(?:ear|eal)|m)',
+        html,
+        re.IGNORECASE,
+    )
+    if lm_match:
+        try:
+            candidate = float(lm_match.group(1).replace(",", ""))
+            if 0.50 <= candidate <= 100_000:
+                logging.debug("  Price found via per-linear-metre pattern")
+                return candidate
+        except ValueError:
+            pass
 
     # Method 1: Next.js embedded page data (__NEXT_DATA__)
     # Bunnings is a Next.js app — all product data is embedded here on load.
@@ -246,21 +269,23 @@ def _scrape_with_curl_cffi(url: str) -> Optional[float]:
 
 
 def _scrape_with_playwright(url: str) -> Optional[float]:
-    """Headless Chrome browser — slower but renders JavaScript."""
+    """Uses the real installed Chrome browser — much harder for sites to detect."""
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        # channel="chrome" uses the user's actual Chrome installation,
+        # which has a genuine browser fingerprint unlike headless Chromium.
+        try:
+            browser = p.chromium.launch(headless=True, channel="chrome")
+        except Exception:
+            browser = p.chromium.launch(headless=True)  # fall back if Chrome not found
         try:
             context = browser.new_context(
-                user_agent=(
-                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-                ),
                 locale="en-AU",
                 timezone_id="Australia/Sydney",
             )
             page = context.new_page()
-            page.goto(url, wait_until="domcontentloaded", timeout=30_000)
-            page.wait_for_timeout(3_000)
+            # networkidle waits until all JS+API calls finish loading
+            page.goto(url, wait_until="networkidle", timeout=45_000)
+            page.wait_for_timeout(2_000)
 
             price_el = page.locator("[itemprop='price']").first
             if price_el.count() > 0:
@@ -292,6 +317,8 @@ def _scrape_with_requests(url: str, session: std_requests.Session) -> Optional[f
 
 
 def scrape_bunnings_price(url: str, session: std_requests.Session) -> Optional[float]:
+    url = clean_url(url)  # Remove ?store=&gclid= tracking junk first
+
     if CURL_CFFI_AVAILABLE:
         price = _scrape_with_curl_cffi(url)
         if price is not None:
