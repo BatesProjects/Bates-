@@ -56,7 +56,7 @@ DELAY_SECONDS = 1   # Pause between requests
 TEST_LIMIT    = 5   # URLs processed in --test mode
 
 # ─── Fill colours ──────────────────────────────────────────────────────────────
-YELLOW_FILL = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
+YELLOW_FILL = PatternFill(start_color="92D050", end_color="92D050", fill_type="solid")
 RED_FILL    = PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid")
 NO_FILL     = PatternFill(fill_type="none")
 
