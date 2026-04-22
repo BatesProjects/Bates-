@@ -102,9 +102,12 @@ def save_workbook(wb: openpyxl.Workbook, spreadsheet_path: Path) -> Path:
 
 
 def clean_url(url: str) -> str:
-    """Strip all query parameters — keeps the bare product URL."""
+    """Keep only the ?store= parameter — strip tracking junk but preserve store pricing."""
     parsed = urlparse(url)
-    return urlunparse(parsed._replace(query="", fragment=""))
+    qs = parse_qs(parsed.query, keep_blank_values=True)
+    store = qs.get("store", [None])[0]
+    new_query = f"store={store}" if store else ""
+    return urlunparse(parsed._replace(query=new_query, fragment=""))
 
 
 def _length_from_url(url: str) -> Optional[float]:
