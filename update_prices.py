@@ -183,15 +183,39 @@ def _extract_price_from_html(html: str) -> Optional[float]:
         except ValueError:
             pass
 
-    # Method 1: Next.js embedded page data (__NEXT_DATA__)
-    # Bunnings is a Next.js app — all product data is embedded here on load.
+    # Method 1a: __NEXT_DATA__ — direct path to store-specific per-lm price.
+    # Two comparisonUnitPrice values exist; the correct one is at:
+    # props.pageProps.initialState.productDetails.stockAvailability.data.price
+    tag = soup.find("script", id="__NEXT_DATA__")
+    if tag and tag.string:
+        try:
+            nd = json.loads(tag.string)
+            price = (
+                nd.get("props", {})
+                  .get("pageProps", {})
+                  .get("initialState", {})
+                  .get("productDetails", {})
+                  .get("stockAvailability", {})
+                  .get("data", {})
+                  .get("price", {})
+                  .get("comparisonUnitPrice")
+            )
+            if price is not None:
+                val = float(str(price).replace(",", "").replace("$", ""))
+                if 0.50 <= val <= 100_000:
+                    logging.debug("  Price found via __NEXT_DATA__ direct path")
+                    return val
+        except (json.JSONDecodeError, ValueError, TypeError, AttributeError):
+            pass
+
+    # Method 1b: __NEXT_DATA__ — recursive fallback if direct path misses.
     tag = soup.find("script", id="__NEXT_DATA__")
     if tag and tag.string:
         try:
             next_data = json.loads(tag.string)
             price = _find_price_in_json(next_data)
             if price is not None:
-                logging.debug("  Price found in __NEXT_DATA__")
+                logging.debug("  Price found in __NEXT_DATA__ (recursive fallback)")
                 return price
         except (json.JSONDecodeError, ValueError):
             pass
@@ -336,31 +360,20 @@ def _scrape_with_requests(url: str, session: std_requests.Session) -> Optional[f
 
 
 def scrape_bunnings_price(url: str, session: std_requests.Session, debug: bool = False) -> Optional[float]:
-    length   = _length_from_url(url)   # e.g. 2.4 from "2-4m" in the URL
-    url      = clean_url(url)          # keep ?store=, strip tracking junk
+    url = clean_url(url)
 
-    piece_price: Optional[float] = None
+    price: Optional[float] = None
 
     if CURL_CFFI_AVAILABLE:
-        piece_price = _scrape_with_curl_cffi(url, debug=debug)
+        price = _scrape_with_curl_cffi(url, debug=debug)
 
-    if piece_price is None and UC_AVAILABLE:
-        piece_price = _scrape_with_undetected_chrome(url)
+    if price is None and UC_AVAILABLE:
+        price = _scrape_with_undetected_chrome(url)
 
-    if piece_price is None:
-        piece_price = _scrape_with_requests(url, session)
+    if price is None:
+        price = _scrape_with_requests(url, session)
 
-    if piece_price is None:
-        return None
-
-    # If the URL contains a length (e.g. 2.4m), the scraped value is the
-    # total piece price — divide to get the per-linear-metre rate.
-    if length and length > 0:
-        per_lm = round(piece_price / length, 2)
-        logging.info("  Piece price $%.2f ÷ %.1fm = $%.2f/lm", piece_price, length, per_lm)
-        return per_lm
-
-    return piece_price
+    return price
 
 
 # ─── Main logic ────────────────────────────────────────────────────────────────
