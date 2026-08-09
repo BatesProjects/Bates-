@@ -192,6 +192,9 @@
   table.data-table textarea{ min-height:30px; }
   td.computed-cell{ font-weight:700; font-size:13px; color: var(--highlight); white-space:nowrap; padding-left:8px; }
   .empty-row{ text-align:center; color: var(--text-faint); padding:16px !important; font-size:12.5px; }
+  td.row-drag-handle{ width:20px; text-align:center; color: var(--text-faint); cursor: grab; user-select:none; font-size:13px; }
+  td.row-drag-handle:hover{ color: var(--text); }
+  table.data-table tr.row-dragging{ opacity:0.4; }
 
   select[data-pill]{ font-weight:700; }
   .pill-success{ color: var(--success) !important; border-color: rgba(111,207,151,0.4) !important; }
@@ -661,6 +664,15 @@ function deleteRow(path, idx){
   scheduleSave();
   renderRoute();
 }
+function reorderRow(path, event, targetIndex){
+  const fromIndex = Number(event.dataTransfer.getData('text/plain'));
+  if(isNaN(fromIndex) || fromIndex === targetIndex) return;
+  const rows = getPath(state, path);
+  const [moved] = rows.splice(fromIndex, 1);
+  rows.splice(targetIndex, 0, moved);
+  scheduleSave();
+  renderRoute();
+}
 
 const COMPUTED_COLUMNS = {
   'finance.jobMargins': [
@@ -697,6 +709,8 @@ function renderCell(col, row, i, path){
 
 function renderTable(path, columns, options={}){
   const rows = getPath(state, path) || [];
+  const reorderable = !!options.reorderable;
+  const extraCols = (reorderable?1:0) + 1; // drag handle (optional) + delete button
   const bodyHtml = rows.length ? rows.map((row,i)=>{
     const cells = columns.map(col=>{
       if(col.type === 'computed'){
@@ -704,9 +718,11 @@ function renderTable(path, columns, options={}){
       }
       return `<td>${renderCell(col,row,i,path)}</td>`;
     }).join('');
-    return `<tr>${cells}<td class="col-actions"><button type="button" class="icon-btn danger" title="Delete row" onclick="deleteRow('${path}',${i})">✕</button></td></tr>`;
-  }).join('') : `<tr><td colspan="${columns.length+1}" class="empty-row">No rows yet — add one below.</td></tr>`;
-  const headers = columns.map(c=>`<th>${escapeHtml(c.label)}</th>`).join('') + '<th></th>';
+    const handleCell = reorderable ? `<td class="row-drag-handle" draggable="true" title="Drag to reorder" ondragstart="event.dataTransfer.setData('text/plain', '${i}'); this.closest('tr').classList.add('row-dragging')" ondragend="this.closest('tr').classList.remove('row-dragging')">⠿</td>` : '';
+    const rowAttrs = reorderable ? `ondragover="event.preventDefault()" ondrop="reorderRow('${path}', event, ${i})"` : '';
+    return `<tr ${rowAttrs}>${handleCell}${cells}<td class="col-actions"><button type="button" class="icon-btn danger" title="Delete row" onclick="deleteRow('${path}',${i})">✕</button></td></tr>`;
+  }).join('') : `<tr><td colspan="${columns.length+extraCols}" class="empty-row">No rows yet — add one below.</td></tr>`;
+  const headers = (reorderable ? '<th></th>' : '') + columns.map(c=>`<th>${escapeHtml(c.label)}</th>`).join('') + '<th></th>';
   return `
     <div class="table-scroll">
       <table class="data-table"><thead><tr>${headers}</tr></thead><tbody>${bodyHtml}</tbody></table>
@@ -1193,11 +1209,12 @@ function renderScheduling(main){
         </div>
         <div class="gantt-wrap">${renderGanttChart(job)}</div>
         <h3 style="margin-top:20px;">Tasks</h3>
+        <p class="panel-desc">Drag the ⠿ handle to reorder tasks — the Gantt above follows the same order.</p>
         ${renderTable(`scheduling.jobs.${idx}.tasks`, [
           { field:'trade', label:'Trade / Task', type:'text' },
           { field:'start', label:'Start Date', type:'date' },
           { field:'duration', label:'Duration (days)', type:'number' }
-        ], { addLabel:'+ Add task' })}
+        ], { addLabel:'+ Add task', reorderable:true })}
       ` : `<p class="muted">No job programmes yet — click "New job programme" to start one.</p>`}
     </div>
   `;
