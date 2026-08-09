@@ -259,7 +259,11 @@
     grid-row:1; background: linear-gradient(90deg, var(--accent-dim), var(--accent));
     border-radius:5px; display:flex; align-items:center; justify-content:center;
     color:#1c2016; font-size:10.5px; font-weight:800; z-index:1; min-width: 18px;
+    cursor: grab; user-select: none; white-space: nowrap; padding: 0 4px;
   }
+  .gantt-bar:active{ cursor: grabbing; }
+  .gantt-bar.dragging{ cursor: grabbing; z-index:2; box-shadow: 0 2px 10px rgba(0,0,0,0.4); opacity:0.92; }
+  body.gantt-dragging{ cursor: grabbing; user-select: none; }
 
   /* ---------- Compliance ---------- */
   .compliance-item{ display:flex; gap:12px; }
@@ -1219,7 +1223,7 @@ function deleteSchedulingJob(){
   renderScheduling(document.getElementById('main'));
 }
 function renderGanttChart(job){
-  const tasks = (job.tasks||[]).filter(t=>t.start && t.duration);
+  const tasks = (job.tasks||[]).map((t,i)=>({...t, _idx:i})).filter(t=>t.start && t.duration);
   if(tasks.length === 0){
     return `<p class="muted">Add tasks below with a start date and a duration to see the programme visualised here.</p>`;
   }
@@ -1229,6 +1233,7 @@ function renderGanttChart(job){
   const minDate = new Date(Math.min(...starts));
   const maxDate = new Date(Math.max(...ends));
   const totalDays = Math.max(dateDiffDays(minDate, maxDate), 1);
+  const totalCols = totalDays + 1;
   let dayCols = '';
   for(let i=0;i<=totalDays;i++){
     const d = addDays(minDate,i);
@@ -1242,19 +1247,63 @@ function renderGanttChart(job){
     return `
       <div class="gantt-row">
         <div class="gantt-row-label" title="${escapeHtml(t.trade)}">${escapeHtml(t.trade || 'Untitled task')}</div>
-        <div class="gantt-row-track" style="grid-template-columns: repeat(${totalDays+1}, minmax(22px,1fr));">
+        <div class="gantt-row-track" style="grid-template-columns: repeat(${totalCols}, minmax(22px,1fr));" data-total-cols="${totalCols}">
           ${dayCols}
-          <div class="gantt-bar" style="grid-column: ${offset+1} / span ${dur};" title="${escapeHtml(t.trade)}: ${formatDateShort(s)} – ${formatDateShort(addDays(s,dur))}">${dur}d</div>
+          <div class="gantt-bar" style="grid-column: ${offset+1} / span ${dur};" data-duration="${dur}"
+               title="${escapeHtml(t.trade)}: ${formatDateShort(s)} – ${formatDateShort(addDays(s,dur))} (drag to reschedule)"
+               onmousedown="startBarDrag(event, ${t._idx})">${dur}d</div>
         </div>
       </div>
     `;
   }).join('');
   return `
     <div class="gantt-chart">
-      <div class="gantt-scale">${formatDateShort(minDate)} → ${formatDateShort(maxDate)} · ${totalDays} day span</div>
+      <div class="gantt-scale">${formatDateShort(minDate)} → ${formatDateShort(maxDate)} · ${totalDays} day span · drag a bar to reschedule it</div>
       <div class="gantt-rows">${rows}</div>
     </div>
   `;
+}
+
+/* Drag a Gantt bar left/right to shift its start date (duration stays fixed). */
+function startBarDrag(e, taskIdx){
+  if(e.button !== undefined && e.button !== 0) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const bar = e.currentTarget;
+  const track = bar.parentElement;
+  const totalCols = Number(track.dataset.totalCols) || 1;
+  const dayWidth = track.getBoundingClientRect().width / totalCols;
+  const jobIdx = state.scheduling.selectedJobIndex;
+  const task = state.scheduling.jobs[jobIdx].tasks[taskIdx];
+  const originalLabel = bar.textContent;
+  const startX = e.clientX;
+  let deltaDays = 0;
+  bar.classList.add('dragging');
+  document.body.classList.add('gantt-dragging');
+
+  function onMove(ev){
+    const deltaPx = ev.clientX - startX;
+    deltaDays = Math.round(deltaPx / dayWidth);
+    bar.style.transform = `translateX(${deltaDays*dayWidth}px)`;
+    bar.textContent = deltaDays === 0 ? originalLabel : `${originalLabel} (${deltaDays>0?'+':''}${deltaDays}d)`;
+  }
+  function onUp(){
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    bar.classList.remove('dragging');
+    document.body.classList.remove('gantt-dragging');
+    if(deltaDays !== 0){
+      const newStart = addDays(parseDateStr(task.start), deltaDays);
+      task.start = newStart.toISOString().slice(0,10);
+      scheduleSave();
+      renderScheduling(document.getElementById('main'));
+    } else {
+      bar.style.transform = '';
+      bar.textContent = originalLabel;
+    }
+  }
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
 }
 
 /* ---------------------------------------------------------------
