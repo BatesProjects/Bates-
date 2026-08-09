@@ -133,6 +133,35 @@
   .field{ margin-bottom:14px; }
   .field-row{ display:grid; grid-template-columns: repeat(auto-fit, minmax(180px,1fr)); gap:14px; }
 
+  /* ---------- Custom calendar date picker ---------- */
+  .date-field{ display:block; position:relative; }
+  .date-field-display{ cursor:pointer; }
+  .date-field-value{ display:none; }
+  .date-picker-popup{
+    position: fixed; z-index: 300; width: 238px;
+    background: var(--bg-card); border:1px solid var(--border); border-radius: var(--radius-sm);
+    box-shadow: 0 10px 28px rgba(0,0,0,0.5); padding:10px;
+  }
+  .dp-header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+  .dp-nav{ background:transparent; border:1px solid var(--border); color:var(--text); width:24px; height:24px; border-radius:5px; cursor:pointer; font-size:13px; line-height:1; }
+  .dp-nav:hover{ border-color:var(--accent); color:var(--accent); }
+  .dp-month-label{ font-size:12.5px; font-weight:700; }
+  .dp-weekdays{ display:grid; grid-template-columns: repeat(7,1fr); margin-bottom:2px; }
+  .dp-weekday{ text-align:center; font-size:10px; color:var(--text-faint); font-weight:700; padding:3px 0; }
+  .dp-weekday.dp-weekend{ color: var(--warning); }
+  .dp-grid{ display:grid; grid-template-columns: repeat(7,1fr); gap:2px; }
+  .dp-cell{ text-align:center; font-size:12px; padding:6px 0; border-radius:5px; font-family:inherit; }
+  button.dp-cell{ background:transparent; border:1px solid transparent; color:var(--text); cursor:pointer; }
+  button.dp-cell:hover{ border-color: var(--accent); }
+  .dp-cell.dp-outside{ color: var(--text-faint); opacity:0.4; }
+  .dp-cell.dp-weekend{ color: var(--warning); }
+  .dp-cell.dp-today{ border-color: var(--accent); font-weight:700; }
+  .dp-cell.dp-selected{ background: var(--accent); color:#1c2016; font-weight:800; }
+  .dp-footer{ display:flex; justify-content:space-between; margin-top:8px; padding-top:8px; border-top:1px solid var(--border-soft); }
+  .dp-footer-btn{ background:transparent; border:1px solid var(--border); color:var(--text-dim); font-size:11px; padding:5px 9px; border-radius:5px; cursor:pointer; }
+  .dp-footer-btn:hover{ color:var(--text); border-color:var(--accent); }
+  .dp-footer-clear{ color: var(--danger); }
+
   /* ---------- Home grid ---------- */
   .home-header{ margin-bottom:22px; }
   .home-header h1{ font-size:24px; }
@@ -278,8 +307,9 @@
   .journal-list{ display:flex; flex-direction:column; gap:12px; margin-bottom:14px; }
   .journal-entry{ background: var(--bg-input); border:1px solid var(--border-soft); border-radius: var(--radius-sm); padding:12px; }
   .journal-entry-head{ display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:8px; }
-  .journal-entry-head input[type=date]{ width:auto; font-weight:700; border-color:transparent; background:transparent; padding-left:0; }
-  .journal-entry-head input[type=date]:hover{ border-color: var(--border); }
+  .journal-entry-head .date-field{ width:auto; }
+  .journal-entry-head .date-field-display{ width:auto; font-weight:700; border-color:transparent; background:transparent; padding-left:0; }
+  .journal-entry-head .date-field-display:hover{ border-color: var(--border); }
   .journal-entry textarea{ min-height:70px; }
 
   /* ---------- To-Do List ---------- */
@@ -568,7 +598,7 @@ function exportData(){
   const blob = new Blob([JSON.stringify(state, null, 2)], {type:'application/json'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  const stamp = new Date().toISOString().slice(0,10);
+  const stamp = toIsoLocal(new Date());
   a.download = `bates-dashboard-backup-${stamp}.json`;
   document.body.appendChild(a); a.click(); a.remove();
 }
@@ -624,11 +654,173 @@ function statusClass(value){
 function parseDateStr(s){ if(!s) return null; const d = new Date(s+'T00:00:00'); return isNaN(d.getTime()) ? null : d; }
 function addDays(date, n){ const d = new Date(date); d.setDate(d.getDate()+Number(n)); return d; }
 function dateDiffDays(a,b){ return Math.round((b-a)/86400000); }
+/* Local-calendar-day ISO string — avoids the UTC-shift bug that
+   .toISOString() has for any timezone ahead of UTC (e.g. Australia),
+   where local midnight can convert to the previous day. */
+function toIsoLocal(d){
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
 function formatDateShort(d){ return d.toLocaleDateString('en-AU', {day:'2-digit', month:'short'}); }
-function todayStr(){ return new Date().toISOString().slice(0,10); }
+function todayStr(){ return toIsoLocal(new Date()); }
+function formatDateDisplayFull(iso){
+  const d = parseDateStr(iso);
+  return d ? d.toLocaleDateString('en-AU', {day:'2-digit', month:'short', year:'numeric'}) : '';
+}
 
 /* ---------------------------------------------------------------
-   4. GENERIC EDITABLE TABLE
+   4. CUSTOM CALENDAR DATE PICKER
+   Every date field in the app renders through renderDatePickerField()
+   instead of a plain <input type="date"> — click it to open a month
+   calendar with weekends shaded and month arrows, rather than typing
+   day/month/year by hand.
+--------------------------------------------------------------- */
+function renderDatePickerField(opts){
+  const { path, id, value } = opts;
+  const displayVal = value ? formatDateDisplayFull(value) : '';
+  const bindAttr = path ? `data-path="${path}"` : `data-plain-id="${id}"`;
+  const hiddenIdAttr = id ? ` id="${id}"` : '';
+  return `
+    <span class="date-field" ${bindAttr}>
+      <input type="text" class="date-field-display" readonly value="${escapeHtml(displayVal)}" placeholder="Select date" onclick="openDatePicker(event, this)">
+      <input type="hidden" class="date-field-value"${hiddenIdAttr} value="${escapeHtml(value||'')}">
+    </span>
+  `;
+}
+
+let activeDatePicker = null;
+function openDatePicker(e, displayInput){
+  e.stopPropagation();
+  closeDatePicker();
+  const wrapper = displayInput.closest('.date-field');
+  const hidden = wrapper.querySelector('.date-field-value');
+  const current = hidden.value ? parseDateStr(hidden.value) : new Date();
+  const rect = displayInput.getBoundingClientRect();
+
+  const popup = document.createElement('div');
+  popup.className = 'date-picker-popup';
+  popup.id = 'active-date-picker-popup';
+  popup.style.top = Math.min(rect.bottom + 4, window.innerHeight - 300) + 'px';
+  popup.style.left = Math.min(rect.left, window.innerWidth - 254) + 'px';
+  document.body.appendChild(popup);
+
+  activeDatePicker = {
+    wrapper, hidden,
+    path: wrapper.dataset.path || null,
+    plainId: wrapper.dataset.plainId || null,
+    viewYear: current.getFullYear(),
+    viewMonth: current.getMonth()
+  };
+  renderDatePickerCalendar();
+  // Deferred so the click that opened this (and any scroll it triggers to
+  // bring the field into view) doesn't immediately trigger these listeners
+  // and close the popup before the user sees it.
+  setTimeout(()=>{
+    if(!activeDatePicker) return;
+    document.addEventListener('mousedown', onDocMouseDownForDatePicker);
+    document.addEventListener('keydown', onDocKeyDownForDatePicker);
+    window.addEventListener('scroll', closeDatePicker, true);
+  }, 0);
+}
+function closeDatePicker(){
+  const popup = document.getElementById('active-date-picker-popup');
+  if(popup) popup.remove();
+  document.removeEventListener('mousedown', onDocMouseDownForDatePicker);
+  document.removeEventListener('keydown', onDocKeyDownForDatePicker);
+  window.removeEventListener('scroll', closeDatePicker, true);
+  activeDatePicker = null;
+}
+function onDocMouseDownForDatePicker(e){
+  if(!activeDatePicker) return;
+  const popup = document.getElementById('active-date-picker-popup');
+  if(activeDatePicker.wrapper.contains(e.target)) return;
+  if(popup && popup.contains(e.target)) return;
+  closeDatePicker();
+}
+function onDocKeyDownForDatePicker(e){
+  if(e.key === 'Escape') closeDatePicker();
+}
+function shiftDatePickerMonth(delta){
+  if(!activeDatePicker) return;
+  activeDatePicker.viewMonth += delta;
+  if(activeDatePicker.viewMonth < 0){ activeDatePicker.viewMonth = 11; activeDatePicker.viewYear--; }
+  else if(activeDatePicker.viewMonth > 11){ activeDatePicker.viewMonth = 0; activeDatePicker.viewYear++; }
+  renderDatePickerCalendar();
+}
+function renderDatePickerCalendar(){
+  const popup = document.getElementById('active-date-picker-popup');
+  if(!popup || !activeDatePicker) return;
+  const { viewYear, viewMonth, hidden } = activeDatePicker;
+  const selected = hidden.value || null;
+  const first = new Date(viewYear, viewMonth, 1);
+  const startOffset = first.getDay();
+  const daysInMonth = new Date(viewYear, viewMonth+1, 0).getDate();
+  const daysInPrevMonth = new Date(viewYear, viewMonth, 0).getDate();
+  const monthLabel = first.toLocaleDateString('en-AU', {month:'long', year:'numeric'});
+  const todayIso = todayStr();
+
+  let cells = '';
+  for(let i=0;i<startOffset;i++){
+    cells += `<div class="dp-cell dp-outside">${daysInPrevMonth - startOffset + 1 + i}</div>`;
+  }
+  for(let d=1; d<=daysInMonth; d++){
+    const dateObj = new Date(viewYear, viewMonth, d);
+    const iso = toIsoLocal(dateObj);
+    const dow = dateObj.getDay();
+    const classes = ['dp-cell','dp-day'];
+    if(dow===0 || dow===6) classes.push('dp-weekend');
+    if(iso === todayIso) classes.push('dp-today');
+    if(iso === selected) classes.push('dp-selected');
+    cells += `<button type="button" class="${classes.join(' ')}" onclick="pickDate('${iso}')">${d}</button>`;
+  }
+  const trailing = (7 - ((startOffset + daysInMonth) % 7)) % 7;
+  for(let i=1;i<=trailing;i++){
+    cells += `<div class="dp-cell dp-outside">${i}</div>`;
+  }
+
+  popup.innerHTML = `
+    <div class="dp-header">
+      <button type="button" class="dp-nav" title="Previous month" onclick="shiftDatePickerMonth(-1)">‹</button>
+      <div class="dp-month-label">${monthLabel}</div>
+      <button type="button" class="dp-nav" title="Next month" onclick="shiftDatePickerMonth(1)">›</button>
+    </div>
+    <div class="dp-weekdays">
+      <div class="dp-weekday dp-weekend">Su</div><div class="dp-weekday">Mo</div><div class="dp-weekday">Tu</div>
+      <div class="dp-weekday">We</div><div class="dp-weekday">Th</div><div class="dp-weekday">Fr</div>
+      <div class="dp-weekday dp-weekend">Sa</div>
+    </div>
+    <div class="dp-grid">${cells}</div>
+    <div class="dp-footer">
+      <button type="button" class="dp-footer-btn" onclick="pickDate('${todayIso}')">Today</button>
+      <button type="button" class="dp-footer-btn dp-footer-clear" onclick="pickDate('')">Clear</button>
+    </div>
+  `;
+}
+function pickDate(iso){
+  if(!activeDatePicker) return;
+  const { path, plainId } = activeDatePicker;
+  closeDatePicker();
+  if(path){
+    setPath(state, path, iso);
+    scheduleSave();
+    refreshComputedForPath(path);
+    updateAllComputedSummaries();
+    renderRoute();
+  } else if(plainId){
+    const hiddenEl = document.getElementById(plainId);
+    if(hiddenEl) hiddenEl.value = iso;
+    const wrapper = document.querySelector(`.date-field[data-plain-id="${plainId}"]`);
+    if(wrapper){
+      const display = wrapper.querySelector('.date-field-display');
+      if(display) display.value = iso ? formatDateDisplayFull(iso) : '';
+    }
+  }
+}
+
+/* ---------------------------------------------------------------
+   5. GENERIC EDITABLE TABLE
 --------------------------------------------------------------- */
 const TABLE_TEMPLATES = {
   'pipeline.leads': () => ({ client:'', address:'', buildType:'Bathroom Renovation', inquiryDate:'', status:'Initial Contact', contactPhone:'', notes:'' }),
@@ -699,7 +891,7 @@ function renderCell(col, row, i, path){
     return `<input type="number" step="any" data-path="${p}" value="${val===undefined||val===''?'':val}">`;
   }
   if(col.type === 'date'){
-    return `<input type="date" data-path="${p}" value="${escapeHtml(val)}">`;
+    return renderDatePickerField({ path: p, value: val });
   }
   if(col.type === 'textarea'){
     return `<textarea data-path="${p}" rows="1">${escapeHtml(val)}</textarea>`;
@@ -737,7 +929,7 @@ function renderJournal(path, options={}){
   const cards = rows.length ? rows.map((row,i)=>`
     <div class="journal-entry">
       <div class="journal-entry-head">
-        <input type="date" data-path="${path}.${i}.date" value="${escapeHtml(row.date)}">
+        ${renderDatePickerField({ path: `${path}.${i}.date`, value: row.date })}
         <button type="button" class="icon-btn danger" title="Delete entry" onclick="deleteRow('${path}',${i})">✕</button>
       </div>
       <textarea data-path="${path}.${i}.text" rows="3" placeholder="${escapeHtml(options.placeholder||'')}">${escapeHtml(row.text)}</textarea>
@@ -750,7 +942,7 @@ function renderJournal(path, options={}){
 }
 
 /* ---------------------------------------------------------------
-   5. LIVE INPUT BINDING (delegated) + computed summary refresh
+   6. LIVE INPUT BINDING (delegated) + computed summary refresh
 --------------------------------------------------------------- */
 function handleInput(e){
   const target = e.target;
@@ -810,7 +1002,7 @@ function updateAllComputedSummaries(){
 }
 
 /* ---------------------------------------------------------------
-   6. ROUTING
+   7. ROUTING
 --------------------------------------------------------------- */
 const ROUTES = [
   { key:'home', label:'Dashboard', icon:'🏠', render: renderHome },
@@ -844,7 +1036,7 @@ function renderRoute(){
 window.addEventListener('hashchange', renderRoute);
 
 /* ---------------------------------------------------------------
-   7. HOME
+   8. HOME
 --------------------------------------------------------------- */
 function renderHome(main){
   const jobCount = state.pipeline.activeJobs.length;
@@ -883,7 +1075,7 @@ function renderHome(main){
 }
 
 /* ---------------------------------------------------------------
-   8. THE BUSINESS
+   9. THE BUSINESS
 --------------------------------------------------------------- */
 function renderBusiness(main){
   main.innerHTML = `
@@ -949,7 +1141,7 @@ function renderBusiness(main){
               <div class="field-row" style="margin-top:8px;">
                 <div class="field"><label class="field-label">Licence number</label><input type="text" data-path="business.compliance.licence.number" value="${escapeHtml(state.business.compliance.licence.number)}"></div>
                 <div class="field"><label class="field-label">Status</label><input type="text" data-path="business.compliance.licence.status" value="${escapeHtml(state.business.compliance.licence.status)}"></div>
-                <div class="field"><label class="field-label">Renewal date</label><input type="date" data-path="business.compliance.licence.renewalDate" value="${escapeHtml(state.business.compliance.licence.renewalDate)}"></div>
+                <div class="field"><label class="field-label">Renewal date</label>${renderDatePickerField({ path: 'business.compliance.licence.renewalDate', value: state.business.compliance.licence.renewalDate })}</div>
               </div>
               <div class="field"><label class="field-label">Class / notes</label><textarea data-path="business.compliance.licence.type" rows="2">${escapeHtml(state.business.compliance.licence.type)}</textarea></div>
             </div>
@@ -964,7 +1156,7 @@ function renderBusiness(main){
                 <div class="field"><label class="field-label">Cover amount</label><input type="text" data-path="business.compliance.insurance.publicLiability" value="${escapeHtml(state.business.compliance.insurance.publicLiability)}"></div>
                 <div class="field"><label class="field-label">Insurer</label><input type="text" data-path="business.compliance.insurance.insurer" value="${escapeHtml(state.business.compliance.insurance.insurer)}"></div>
                 <div class="field"><label class="field-label">Policy number</label><input type="text" data-path="business.compliance.insurance.policyNumber" value="${escapeHtml(state.business.compliance.insurance.policyNumber)}"></div>
-                <div class="field"><label class="field-label">Expiry</label><input type="date" data-path="business.compliance.insurance.expiry" value="${escapeHtml(state.business.compliance.insurance.expiry)}"></div>
+                <div class="field"><label class="field-label">Expiry</label>${renderDatePickerField({ path: 'business.compliance.insurance.expiry', value: state.business.compliance.insurance.expiry })}</div>
               </div>
             </div>
           </div>
@@ -985,7 +1177,7 @@ function renderBusiness(main){
             <div style="flex:1;">
               <div class="ci-title">Home Building Act 1989 (NSW)</div>
               <div class="field" style="margin-top:8px;"><label class="field-label">Notes / obligations</label><textarea data-path="business.compliance.homeBuildingAct.notes" rows="5">${escapeHtml(state.business.compliance.homeBuildingAct.notes)}</textarea></div>
-              <div class="field"><label class="field-label">Last verified</label><input type="date" data-path="business.compliance.homeBuildingAct.lastVerified" value="${escapeHtml(state.business.compliance.homeBuildingAct.lastVerified)}"></div>
+              <div class="field"><label class="field-label">Last verified</label>${renderDatePickerField({ path: 'business.compliance.homeBuildingAct.lastVerified', value: state.business.compliance.homeBuildingAct.lastVerified })}</div>
             </div>
           </div>
         </div>
@@ -995,7 +1187,7 @@ function renderBusiness(main){
 }
 
 /* ---------------------------------------------------------------
-   9. JOB PIPELINE
+   10. JOB PIPELINE
 --------------------------------------------------------------- */
 let pipelineTab = 'jobs';
 function renderPipeline(main){
@@ -1119,7 +1311,7 @@ function deleteKanbanCard(i){
 }
 
 /* ---------------------------------------------------------------
-   10. ESTIMATING & QUOTING
+   11. ESTIMATING & QUOTING
 --------------------------------------------------------------- */
 function renderEstimating(main){
   main.innerHTML = `
@@ -1180,7 +1372,7 @@ function copyPriceBookPath(){
 }
 
 /* ---------------------------------------------------------------
-   11. SCHEDULING
+   12. SCHEDULING
 --------------------------------------------------------------- */
 function renderScheduling(main){
   const jobs = state.scheduling.jobs;
@@ -1311,7 +1503,7 @@ function startBarDrag(e, taskIdx){
     document.body.classList.remove('gantt-dragging');
     if(deltaDays !== 0){
       const newStart = addDays(parseDateStr(task.start), deltaDays);
-      task.start = newStart.toISOString().slice(0,10);
+      task.start = toIsoLocal(newStart);
       scheduleSave();
       renderScheduling(document.getElementById('main'));
     } else {
@@ -1324,7 +1516,7 @@ function startBarDrag(e, taskIdx){
 }
 
 /* ---------------------------------------------------------------
-   12. FINANCE
+   13. FINANCE
 --------------------------------------------------------------- */
 let financeTab = 'overheads';
 function renderFinance(main){
@@ -1436,7 +1628,7 @@ function renderFinanceBody(){
 }
 
 /* ---------------------------------------------------------------
-   13. MARKETING & GROWTH
+   14. MARKETING & GROWTH
 --------------------------------------------------------------- */
 function renderMarketing(main){
   const w = state.marketing.website;
@@ -1481,7 +1673,7 @@ function renderMarketing(main){
 }
 
 /* ---------------------------------------------------------------
-   14. CONTACTS
+   15. CONTACTS
 --------------------------------------------------------------- */
 let contactsTab = 'trades';
 function renderContacts(main){
@@ -1573,7 +1765,7 @@ function deleteTradeCategory(){
 }
 
 /* ---------------------------------------------------------------
-   15. SITE DIARY
+   16. SITE DIARY
 --------------------------------------------------------------- */
 let siteDiaryTab = 'daily';
 function renderSiteDiary(main){
@@ -1612,7 +1804,7 @@ function renderSiteDiaryBody(){
 }
 
 /* ---------------------------------------------------------------
-   16. TO-DO LIST
+   17. TO-DO LIST
 --------------------------------------------------------------- */
 let todoFilter = 'open';
 function renderTodos(main){
@@ -1624,7 +1816,7 @@ function renderTodos(main){
     <div class="panel">
       <div class="todo-add-row">
         <div class="field"><label class="field-label">New task</label><input type="text" id="todo-new-text" placeholder="e.g. Chase HBCF cert for Client B job" onkeydown="if(event.key==='Enter') addTodo()"></div>
-        <div class="field"><label class="field-label">Due (optional)</label><input type="date" id="todo-new-due"></div>
+        <div class="field"><label class="field-label">Due (optional)</label>${renderDatePickerField({ id: 'todo-new-due', value: '' })}</div>
         <div class="field"><label class="field-label">Priority</label>
           <select id="todo-new-priority"><option>Low</option><option selected>Medium</option><option>High</option></select>
         </div>
@@ -1647,7 +1839,7 @@ function renderTodoRows(){
     <div class="todo-row ${t.done?'is-done':''}">
       <input type="checkbox" onchange="toggleTodoDone(${i})" ${t.done?'checked':''}>
       <input type="text" class="todo-text-input" data-path="todos.${i}.text" value="${escapeHtml(t.text)}">
-      <input type="date" data-path="todos.${i}.due" value="${escapeHtml(t.due)}">
+      ${renderDatePickerField({ path: `todos.${i}.due`, value: t.due })}
       <select data-path="todos.${i}.priority" data-pill="true" class="${statusClass(t.priority)}">
         ${['Low','Medium','High'].map(p=>`<option ${p===t.priority?'selected':''}>${p}</option>`).join('')}
       </select>
@@ -1676,7 +1868,7 @@ function toggleTodoDone(i){
 function setTodoFilter(f){ todoFilter = f; renderTodos(document.getElementById('main')); }
 
 /* ---------------------------------------------------------------
-   17. INIT
+   18. INIT
 --------------------------------------------------------------- */
 buildSideNav();
 renderRoute();
