@@ -475,15 +475,29 @@ const DEFAULT_DATA = {
     ]
   },
 
-  director: {
-    techStack: [
-      { category: 'Accounting', tool: 'Xero', monthlyCost: 0, notes: 'Invoicing, payroll, BAS.' },
-      { category: 'Estimating', tool: 'PriceBook.xlsx', monthlyCost: 0, notes: 'Local spreadsheet — source of truth for rates.' },
-      { category: 'Communication', tool: 'Email / phone', monthlyCost: 0, notes: '' },
-      { category: 'Documents', tool: 'e.g. Google Drive', monthlyCost: 0, notes: 'Contracts, drawings, photos.' }
+  contacts: {
+    selectedTradeIndex: 0,
+    trades: [
+      { category: 'Plumbing', contacts: [] },
+      { category: 'Electrical', contacts: [] },
+      { category: 'Carpentry', contacts: [] },
+      { category: 'Tiling', contacts: [] },
+      { category: 'Waterproofing', contacts: [] },
+      { category: 'Painting', contacts: [] },
+      { category: 'Roofing', contacts: [] },
+      { category: 'Concreting', contacts: [] },
+      { category: 'Excavation & Earthworks', contacts: [] },
+      { category: 'Plastering / Gyprock', contacts: [] },
+      { category: 'Cabinetmaking / Joinery', contacts: [] },
+      { category: 'Glazing', contacts: [] },
+      { category: 'Steel / Structural', contacts: [] },
+      { category: 'Air Conditioning / HVAC', contacts: [] },
+      { category: 'Landscaping', contacts: [] },
+      { category: 'Scaffolding', contacts: [] },
+      { category: 'Surveying / Certifiers', contacts: [] }
     ],
-    issuesLog: [
-      { date: '', job: 'Sample entry', issue: 'Describe what went wrong.', resolution: 'What you did about it.', lesson: 'What to change next time — this is the valuable bit.' }
+    suppliers: [
+      { category: 'Timber & Building Materials', company: 'e.g. Cabarita Timber & Hardware', contactName: '', phone: '', email: '', accountNumber: '', notes: 'Sample row — edit or delete.' }
     ]
   },
 
@@ -522,7 +536,9 @@ function loadState(){
   try{
     const raw = localStorage.getItem(STORAGE_KEY);
     if(!raw) return structuredClone(DEFAULT_DATA);
-    return mergeDeep(DEFAULT_DATA, JSON.parse(raw));
+    const merged = mergeDeep(DEFAULT_DATA, JSON.parse(raw));
+    delete merged.director; // retired section — drop any leftover saved data from older versions of this file
+    return merged;
   }catch(e){
     console.error('Failed to load saved data, falling back to sample data.', e);
     return structuredClone(DEFAULT_DATA);
@@ -617,14 +633,14 @@ const TABLE_TEMPLATES = {
   'finance.variations': () => ({ job:'', description:'', value:0, status:'Pending', dateRaised:'' }),
   'marketing.adCampaigns': () => ({ platform:'', spend:0, leads:0, notes:'' }),
   'marketing.referrals': () => ({ source:'', jobsReferred:0, valueGenerated:0, notes:'' }),
-  'director.techStack': () => ({ category:'', tool:'', monthlyCost:0, notes:'' }),
-  'director.issuesLog': () => ({ date:'', job:'', issue:'', resolution:'', lesson:'' }),
   'siteDiary.dailyEntries': () => ({ date: todayStr(), text:'' }),
-  'siteDiary.lessonsEntries': () => ({ date: todayStr(), text:'' })
+  'siteDiary.lessonsEntries': () => ({ date: todayStr(), text:'' }),
+  'contacts.suppliers': () => ({ category:'', company:'', contactName:'', phone:'', email:'', accountNumber:'', notes:'' })
 };
 function getTemplate(path){
   if(TABLE_TEMPLATES[path]) return TABLE_TEMPLATES[path]();
   if(/^scheduling\.jobs\.\d+\.tasks$/.test(path)) return { trade:'', start:'', duration:1 };
+  if(/^contacts\.trades\.\d+\.contacts$/.test(path)) return { name:'', company:'', phone:'', email:'', hourlyRate:0, notes:'' };
   return {};
 }
 function addRow(path, opts={}){
@@ -784,7 +800,7 @@ const ROUTES = [
   { key:'scheduling', label:'Scheduling', icon:'📅', render: renderScheduling },
   { key:'finance', label:'Finance', icon:'💰', render: renderFinance },
   { key:'marketing', label:'Marketing & Growth', icon:'📈', render: renderMarketing },
-  { key:'director', label:'Director / Tools', icon:'🛠️', render: renderDirector },
+  { key:'contacts', label:'Contacts', icon:'📇', render: renderContacts },
   { key:'sitediary', label:'Site Diary', icon:'📔', render: renderSiteDiary },
   { key:'todos', label:'To-Do List', icon:'✅', render: renderTodos }
 ];
@@ -816,6 +832,7 @@ function renderHome(main){
   const ovTotal = state.finance.overheads.categories.reduce((s,c)=>s+(Number(c.monthly)||0),0);
   const varCount = state.finance.variations.filter(v=>v.status==='Pending').length;
   const openTodos = state.todos.filter(t=>!t.done).length;
+  const tradeContactCount = state.contacts.trades.reduce((s,t)=>s+t.contacts.length,0);
   const cards = [
     { key:'business', icon:'🏗️', title:'The Business', desc:'Vision & goals, build process, systems guide, compliance & licensing.', stat: 'Lic. 480112C · $20M PL' },
     { key:'pipeline', icon:'📋', title:'Job Pipeline', desc:'Active jobs, pipeline planner, leads & enquiries tracker.', stat: `${jobCount} active job${jobCount===1?'':'s'} · ${leadCount} lead${leadCount===1?'':'s'}` },
@@ -823,7 +840,7 @@ function renderHome(main){
     { key:'scheduling', icon:'📅', title:'Scheduling', desc:'Programme / Gantt overview per job.', stat: `${state.scheduling.jobs.length} job programme(s)` },
     { key:'finance', icon:'💰', title:'Finance', desc:'Overhead audit, cash flow snapshot, job margin & risk, variations.', stat: `${formatCurrency(ovTotal)}/mo overhead · ${varCount} variation(s) pending` },
     { key:'marketing', icon:'📈', title:'Marketing & Growth', desc:'Website/SEO, ad performance, referral tracking.', stat: `${state.marketing.referrals.length} referral source(s)` },
-    { key:'director', icon:'🛠️', title:'Director / Tools', desc:'Tech stack map, issues & lessons learned log.', stat: `${state.director.techStack.length} tools tracked` },
+    { key:'contacts', icon:'📇', title:'Contacts', desc:'Trade contacts by category, plus a supplier directory.', stat: `${tradeContactCount} trade contact(s) · ${state.contacts.suppliers.length} supplier(s)` },
     { key:'sitediary', icon:'📔', title:'Site Diary', desc:'Daily diary/reminders plus a lessons-learned journal — a quick end-of-arvo habit.', stat: `${state.siteDiary.dailyEntries.length} diary entr${state.siteDiary.dailyEntries.length===1?'y':'ies'}` },
     { key:'todos', icon:'✅', title:'To-Do List', desc:'A running list for the business.', stat: `${openTodos} open task${openTodos===1?'':'s'}` }
   ];
@@ -1398,37 +1415,95 @@ function renderMarketing(main){
 }
 
 /* ---------------------------------------------------------------
-   14. DIRECTOR / TOOLS
+   14. CONTACTS
 --------------------------------------------------------------- */
-function renderDirector(main){
+let contactsTab = 'trades';
+function renderContacts(main){
   main.innerHTML = `
     <div class="section-head">
-      <div><h1>Director / Tools</h1><p>Your tech stack map and an issues / lessons learned log.</p></div>
+      <div><h1>Contacts</h1><p>Trade and supplier directory — contact info and rates for quick reference when pricing or booking work.</p></div>
     </div>
-
-    <div class="panel">
-      <h3>Tech Stack Map</h3>
-      <p class="panel-desc">What software runs the business, and what it costs.</p>
-      ${renderTable('director.techStack', [
-        { field:'category', label:'Category', type:'text' },
-        { field:'tool', label:'Tool', type:'text' },
-        { field:'monthlyCost', label:'Monthly Cost', type:'number' },
-        { field:'notes', label:'Notes', type:'textarea' }
-      ], { addLabel:'+ Add tool' })}
+    <div class="subnav">
+      <button class="subnav-btn ${contactsTab==='trades'?'active':''}" onclick="setContactsTab('trades')">Trades</button>
+      <button class="subnav-btn ${contactsTab==='suppliers'?'active':''}" onclick="setContactsTab('suppliers')">Suppliers</button>
     </div>
-
-    <div class="panel">
-      <h3>Issues / Lessons Learned Log</h3>
-      <p class="panel-desc">Formal per-incident record — what happened, what fixed it, what changed. For a quick daily habit, see Site Diary instead.</p>
-      ${renderTable('director.issuesLog', [
-        { field:'date', label:'Date', type:'date' },
-        { field:'job', label:'Job', type:'text' },
-        { field:'issue', label:'Issue', type:'textarea' },
-        { field:'resolution', label:'Resolution', type:'textarea' },
-        { field:'lesson', label:'Lesson Learned', type:'textarea' }
-      ], { addLabel:'+ Add entry' })}
-    </div>
+    <div id="contacts-body"></div>
   `;
+  renderContactsBody();
+}
+function setContactsTab(tab){ contactsTab = tab; renderContacts(document.getElementById('main')); }
+function renderContactsBody(){
+  const body = document.getElementById('contacts-body');
+  if(contactsTab === 'trades'){
+    const trades = state.contacts.trades;
+    if(state.contacts.selectedTradeIndex >= trades.length) state.contacts.selectedTradeIndex = 0;
+    const idx = state.contacts.selectedTradeIndex;
+    const trade = trades[idx];
+    body.innerHTML = `
+      <div class="panel">
+        <div class="field-row" style="align-items:flex-end;">
+          <div class="field">
+            <label class="field-label">Trade category</label>
+            <select onchange="selectContactsTrade(this.value)">
+              ${trades.map((t,i)=>`<option value="${i}" ${i===idx?'selected':''}>${escapeHtml(t.category || 'Untitled')} (${t.contacts.length})</option>`).join('')}
+            </select>
+          </div>
+          <div class="field"><button class="btn btn-sm" onclick="addTradeCategory()">+ New trade category</button></div>
+          ${trades.length>1 ? `<div class="field"><button class="btn btn-sm" onclick="deleteTradeCategory()">Delete this category</button></div>` : ''}
+        </div>
+        ${trade ? `
+          <div class="field" style="max-width:320px;">
+            <label class="field-label">Category name</label>
+            <input type="text" data-path="contacts.trades.${idx}.category" value="${escapeHtml(trade.category)}">
+          </div>
+          ${renderTable(`contacts.trades.${idx}.contacts`, [
+            { field:'name', label:'Name', type:'text' },
+            { field:'company', label:'Company', type:'text' },
+            { field:'phone', label:'Phone', type:'text' },
+            { field:'email', label:'Email', type:'text' },
+            { field:'hourlyRate', label:'Avg Hourly Rate', type:'number' },
+            { field:'notes', label:'Notes', type:'textarea' }
+          ], { addLabel:'+ Add contact' })}
+        ` : `<p class="muted">No trade categories yet — click "New trade category" to add one.</p>`}
+      </div>
+    `;
+  } else {
+    body.innerHTML = `
+      <div class="panel">
+        <h3>Suppliers</h3>
+        <p class="panel-desc">Materials, hire, and other suppliers you deal with regularly.</p>
+        ${renderTable('contacts.suppliers', [
+          { field:'category', label:'Category', type:'text' },
+          { field:'company', label:'Supplier / Company', type:'text' },
+          { field:'contactName', label:'Contact Name', type:'text' },
+          { field:'phone', label:'Phone', type:'text' },
+          { field:'email', label:'Email', type:'text' },
+          { field:'accountNumber', label:'Account #', type:'text' },
+          { field:'notes', label:'Notes', type:'textarea' }
+        ], { addLabel:'+ Add supplier' })}
+      </div>
+    `;
+  }
+}
+function selectContactsTrade(val){
+  state.contacts.selectedTradeIndex = Number(val);
+  scheduleSave();
+  renderContacts(document.getElementById('main'));
+}
+function addTradeCategory(){
+  const name = prompt('Trade category name (e.g. "Fencing"):');
+  if(!name) return;
+  state.contacts.trades.push({ category: name, contacts: [] });
+  state.contacts.selectedTradeIndex = state.contacts.trades.length - 1;
+  scheduleSave();
+  renderContacts(document.getElementById('main'));
+}
+function deleteTradeCategory(){
+  if(!confirm('Delete this trade category and all its contacts?')) return;
+  state.contacts.trades.splice(state.contacts.selectedTradeIndex, 1);
+  state.contacts.selectedTradeIndex = 0;
+  scheduleSave();
+  renderContacts(document.getElementById('main'));
 }
 
 /* ---------------------------------------------------------------
