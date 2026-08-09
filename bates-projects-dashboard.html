@@ -6,22 +6,24 @@
 <title>Bates Projects — Business Dashboard</title>
 <style>
   :root{
-    --bg: #0d0f14;
-    --bg-elevated: #12151d;
-    --bg-card: #1a1f2b;
-    --bg-input: #10131a;
-    --border: #2a3040;
-    --border-soft: #232936;
-    --text: #e9ebf0;
-    --text-dim: #9aa3b5;
-    --text-faint: #6b7386;
-    --accent: #ff8a3d;
-    --accent-dim: #c96a2c;
-    --accent-soft: rgba(255,138,61,0.12);
-    --teal: #4fd1c5;
-    --success: #6fcf97;
-    --warning: #f2c94c;
-    --danger: #ef5b5b;
+    /* Bates Projects brand — charcoal-green base. Tweak these to match
+       your logo file exactly if this estimate is a little off. */
+    --bg: #24261f;
+    --bg-elevated: #2a2c23;
+    --bg-card: #33362b;
+    --bg-input: #1c1e17;
+    --border: #4a4d3d;
+    --border-soft: #3b3e31;
+    --text: #f2f1e8;
+    --text-dim: #b4b3a1;
+    --text-faint: #86856f;
+    --accent: #a9c98f;
+    --accent-dim: #87a86b;
+    --accent-soft: rgba(169,201,143,0.16);
+    --highlight: #d8c084;
+    --success: #8fd18f;
+    --warning: #e0c368;
+    --danger: #e0806f;
     --radius: 10px;
     --radius-sm: 6px;
     font-size: 15px;
@@ -55,19 +57,16 @@
     height:100vh;
   }
   .brand{
-    padding: 6px 10px 18px 10px;
+    padding: 8px 10px 18px 10px;
     border-bottom: 1px solid var(--border-soft);
     margin-bottom: 14px;
   }
-  .brand .logo-row{ display:flex; align-items:center; gap:8px; }
-  .brand .logo-mark{
-    width:30px; height:30px; border-radius:7px;
-    background: linear-gradient(135deg, var(--accent), var(--accent-dim));
-    display:flex; align-items:center; justify-content:center;
-    font-size:16px; flex-shrink:0;
-  }
-  .brand .name{ font-size:15px; font-weight:800; line-height:1.15; }
-  .brand .sub{ font-size:11.5px; color: var(--text-dim); margin-top:2px; }
+  /* Recreated in CSS from the logo's wordmark (bold BATES over tracked
+     PROJECTS). Swap this block for an <img src="data:..."> tag if you
+     want the exact raster logo embedded instead. */
+  .brand .logo-word{ font-size:21px; font-weight:800; letter-spacing:0.07em; line-height:1; color: var(--text); }
+  .brand .logo-sub{ font-size:10.5px; font-weight:700; letter-spacing:0.32em; color: var(--text-dim); margin-top:5px; }
+  .brand .sub{ font-size:11.5px; color: var(--text-faint); margin-top:12px; }
 
   nav.side-nav{ flex:1; display:flex; flex-direction:column; gap:2px; }
   .nav-link{
@@ -78,7 +77,7 @@
   }
   .nav-link .ic{ font-size:16px; width:20px; text-align:center; }
   .nav-link:hover{ background: var(--bg-card); color: var(--text); }
-  .nav-link.active{ background: var(--accent-soft); color: var(--accent); border-color: rgba(255,138,61,0.25); }
+  .nav-link.active{ background: var(--accent-soft); color: var(--accent); border-color: rgba(169,201,143,0.3); }
 
   .sidebar-footer{ border-top:1px solid var(--border-soft); padding-top:12px; margin-top:10px; }
   .sidebar-footer .btn-row{ display:flex; gap:6px; margin-bottom:8px; }
@@ -106,8 +105,8 @@
     cursor:pointer;
   }
   .btn:hover{ border-color: var(--accent); }
-  .btn-primary{ background: var(--accent); border-color: var(--accent); color:#1a1105; }
-  .btn-primary:hover{ background: #ff9a55; }
+  .btn-primary{ background: var(--accent); border-color: var(--accent); color:#1c2016; }
+  .btn-primary:hover{ background: #bdd9a4; }
   .btn-ghost{ background: transparent; }
   .btn-sm{ padding:6px 10px; font-size:12.5px; }
   .icon-btn{
@@ -165,7 +164,7 @@
     background: transparent; border:1px solid var(--border); color: var(--text-dim);
     padding:7px 12px; border-radius: 999px; font-size:12.5px; font-weight:600; cursor:pointer;
   }
-  .subnav-btn.active{ background: var(--accent-soft); color: var(--accent); border-color: rgba(255,138,61,0.3); }
+  .subnav-btn.active{ background: var(--accent-soft); color: var(--accent); border-color: rgba(169,201,143,0.3); }
 
   .panel{
     background: var(--bg-card); border:1px solid var(--border-soft);
@@ -191,7 +190,7 @@
   table.data-table input:hover, table.data-table select:hover, table.data-table textarea:hover{ border-color: var(--border); }
   table.data-table input:focus, table.data-table select:focus, table.data-table textarea:focus{ background: var(--bg-input); border-color: var(--accent); }
   table.data-table textarea{ min-height:30px; }
-  td.computed-cell{ font-weight:700; font-size:13px; color: var(--teal); white-space:nowrap; padding-left:8px; }
+  td.computed-cell{ font-weight:700; font-size:13px; color: var(--highlight); white-space:nowrap; padding-left:8px; }
   .empty-row{ text-align:center; color: var(--text-faint); padding:16px !important; font-size:12.5px; }
 
   select[data-pill]{ font-weight:700; }
@@ -241,7 +240,7 @@
   .kanban-card:active{ cursor: grabbing; }
   .kanban-card .kc-title{ font-weight:700; margin-bottom:3px; }
   .kanban-card .kc-meta{ color: var(--text-dim); font-size:11.5px; }
-  .kanban-card .kc-value{ color: var(--teal); font-weight:700; font-size:12px; margin-top:4px; }
+  .kanban-card .kc-value{ color: var(--highlight); font-weight:700; font-size:12px; margin-top:4px; }
   .kanban-card .kc-del{ float:right; background:none; border:none; color:var(--text-faint); cursor:pointer; font-size:12px; }
   .kanban-add{ margin-top:12px; background: var(--bg-card); border:1px dashed var(--border); border-radius: var(--radius-sm); padding:12px; }
   .kanban-add .field-row{ margin-bottom:8px; }
@@ -259,7 +258,7 @@
   .gantt-bar{
     grid-row:1; background: linear-gradient(90deg, var(--accent-dim), var(--accent));
     border-radius:5px; display:flex; align-items:center; justify-content:center;
-    color:#1a1105; font-size:10.5px; font-weight:800; z-index:1; min-width: 18px;
+    color:#1c2016; font-size:10.5px; font-weight:800; z-index:1; min-width: 18px;
   }
 
   /* ---------- Compliance ---------- */
@@ -267,6 +266,25 @@
   .compliance-item .ci-icon{ font-size:20px; flex-shrink:0; }
   .compliance-item .ci-title{ font-size:13.5px; font-weight:700; }
   .compliance-item .ci-body{ font-size:12.5px; color:var(--text-dim); }
+
+  /* ---------- Journal (Site Diary) ---------- */
+  .journal-list{ display:flex; flex-direction:column; gap:12px; margin-bottom:14px; }
+  .journal-entry{ background: var(--bg-input); border:1px solid var(--border-soft); border-radius: var(--radius-sm); padding:12px; }
+  .journal-entry-head{ display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:8px; }
+  .journal-entry-head input[type=date]{ width:auto; font-weight:700; border-color:transparent; background:transparent; padding-left:0; }
+  .journal-entry-head input[type=date]:hover{ border-color: var(--border); }
+  .journal-entry textarea{ min-height:70px; }
+
+  /* ---------- To-Do List ---------- */
+  .todo-add-row{ display:grid; grid-template-columns: 1fr 150px 120px auto; gap:10px; align-items:end; }
+  .todo-list{ display:flex; flex-direction:column; gap:4px; margin-top:6px; }
+  .todo-row{ display:grid; grid-template-columns: auto 1fr 140px 110px 32px; align-items:center; gap:8px; padding:7px 4px; border-bottom:1px solid var(--border-soft); }
+  .todo-row:last-child{ border-bottom:none; }
+  .todo-row input[type=checkbox]{ width:17px; height:17px; accent-color: var(--accent); cursor:pointer; }
+  .todo-row.is-done .todo-text-input{ text-decoration: line-through; color: var(--text-faint); }
+  .todo-row input, .todo-row select{ background: transparent; border-color: transparent; }
+  .todo-row input:hover, .todo-row select:hover{ border-color: var(--border); }
+  .todo-row input:focus, .todo-row select:focus{ background: var(--bg-input); border-color: var(--accent); }
 
   footer.app-footer{ text-align:center; padding: 20px; color: var(--text-faint); font-size:11.5px; }
 
@@ -284,13 +302,9 @@
 
 <aside id="sidebar">
   <div class="brand">
-    <div class="logo-row">
-      <div class="logo-mark">🏗️</div>
-      <div>
-        <div class="name">Bates Projects</div>
-        <div class="sub">Cabarita Beach · Tweed Coast &amp; Northern Rivers</div>
-      </div>
-    </div>
+    <div class="logo-word">BATES</div>
+    <div class="logo-sub">PROJECTS</div>
+    <div class="sub">Cabarita Beach · Tweed Coast &amp; Northern Rivers</div>
   </div>
   <nav class="side-nav" id="side-nav"></nav>
   <div class="sidebar-footer">
@@ -471,7 +485,20 @@ const DEFAULT_DATA = {
     issuesLog: [
       { date: '', job: 'Sample entry', issue: 'Describe what went wrong.', resolution: 'What you did about it.', lesson: 'What to change next time — this is the valuable bit.' }
     ]
-  }
+  },
+
+  siteDiary: {
+    dailyEntries: [
+      { date: '', text: 'Sample entry — what happened on site today, what to chase up, what to look forward to tomorrow. Edit or delete.' }
+    ],
+    lessonsEntries: [
+      { date: '', text: 'Sample entry — a job site lesson worth remembering. Edit or delete. A quick habit for the end of each arvo.' }
+    ]
+  },
+
+  todos: [
+    { text: 'Sample task — edit or delete', done: false, due: '', priority: 'Medium' }
+  ]
 };
 
 /* ---------------------------------------------------------------
@@ -575,6 +602,7 @@ function parseDateStr(s){ if(!s) return null; const d = new Date(s+'T00:00:00');
 function addDays(date, n){ const d = new Date(date); d.setDate(d.getDate()+Number(n)); return d; }
 function dateDiffDays(a,b){ return Math.round((b-a)/86400000); }
 function formatDateShort(d){ return d.toLocaleDateString('en-AU', {day:'2-digit', month:'short'}); }
+function todayStr(){ return new Date().toISOString().slice(0,10); }
 
 /* ---------------------------------------------------------------
    4. GENERIC EDITABLE TABLE
@@ -590,16 +618,19 @@ const TABLE_TEMPLATES = {
   'marketing.adCampaigns': () => ({ platform:'', spend:0, leads:0, notes:'' }),
   'marketing.referrals': () => ({ source:'', jobsReferred:0, valueGenerated:0, notes:'' }),
   'director.techStack': () => ({ category:'', tool:'', monthlyCost:0, notes:'' }),
-  'director.issuesLog': () => ({ date:'', job:'', issue:'', resolution:'', lesson:'' })
+  'director.issuesLog': () => ({ date:'', job:'', issue:'', resolution:'', lesson:'' }),
+  'siteDiary.dailyEntries': () => ({ date: todayStr(), text:'' }),
+  'siteDiary.lessonsEntries': () => ({ date: todayStr(), text:'' })
 };
 function getTemplate(path){
   if(TABLE_TEMPLATES[path]) return TABLE_TEMPLATES[path]();
   if(/^scheduling\.jobs\.\d+\.tasks$/.test(path)) return { trade:'', start:'', duration:1 };
   return {};
 }
-function addRow(path){
+function addRow(path, opts={}){
   const rows = getPath(state, path);
-  rows.push(getTemplate(path));
+  const row = getTemplate(path);
+  if(opts.prepend) rows.unshift(row); else rows.push(row);
   scheduleSave();
   renderRoute();
 }
@@ -661,6 +692,24 @@ function renderTable(path, columns, options={}){
       <table class="data-table"><thead><tr>${headers}</tr></thead><tbody>${bodyHtml}</tbody></table>
     </div>
     <button type="button" class="btn btn-ghost btn-sm" onclick="addRow('${path}')">${options.addLabel || '+ Add row'}</button>
+  `;
+}
+
+/* Freeform dated journal entries (Site Diary) — newest first, prepended on add. */
+function renderJournal(path, options={}){
+  const rows = getPath(state, path) || [];
+  const cards = rows.length ? rows.map((row,i)=>`
+    <div class="journal-entry">
+      <div class="journal-entry-head">
+        <input type="date" data-path="${path}.${i}.date" value="${escapeHtml(row.date)}">
+        <button type="button" class="icon-btn danger" title="Delete entry" onclick="deleteRow('${path}',${i})">✕</button>
+      </div>
+      <textarea data-path="${path}.${i}.text" rows="3" placeholder="${escapeHtml(options.placeholder||'')}">${escapeHtml(row.text)}</textarea>
+    </div>
+  `).join('') : `<p class="muted">No entries yet — add your first one below.</p>`;
+  return `
+    <div class="journal-list">${cards}</div>
+    <button type="button" class="btn btn-primary btn-sm" onclick="addRow('${path}', {prepend:true})">${options.addLabel || '+ Add entry'}</button>
   `;
 }
 
@@ -735,7 +784,9 @@ const ROUTES = [
   { key:'scheduling', label:'Scheduling', icon:'📅', render: renderScheduling },
   { key:'finance', label:'Finance', icon:'💰', render: renderFinance },
   { key:'marketing', label:'Marketing & Growth', icon:'📈', render: renderMarketing },
-  { key:'director', label:'Director / Tools', icon:'🛠️', render: renderDirector }
+  { key:'director', label:'Director / Tools', icon:'🛠️', render: renderDirector },
+  { key:'sitediary', label:'Site Diary', icon:'📔', render: renderSiteDiary },
+  { key:'todos', label:'To-Do List', icon:'✅', render: renderTodos }
 ];
 function navigate(key){ location.hash = key === 'home' ? '' : key; }
 function buildSideNav(){
@@ -764,6 +815,7 @@ function renderHome(main){
   const leadCount = state.pipeline.leads.length;
   const ovTotal = state.finance.overheads.categories.reduce((s,c)=>s+(Number(c.monthly)||0),0);
   const varCount = state.finance.variations.filter(v=>v.status==='Pending').length;
+  const openTodos = state.todos.filter(t=>!t.done).length;
   const cards = [
     { key:'business', icon:'🏗️', title:'The Business', desc:'Vision & goals, build process, systems guide, compliance & licensing.', stat: 'Lic. 480112C · $20M PL' },
     { key:'pipeline', icon:'📋', title:'Job Pipeline', desc:'Active jobs, pipeline planner, leads & enquiries tracker.', stat: `${jobCount} active job${jobCount===1?'':'s'} · ${leadCount} lead${leadCount===1?'':'s'}` },
@@ -771,7 +823,9 @@ function renderHome(main){
     { key:'scheduling', icon:'📅', title:'Scheduling', desc:'Programme / Gantt overview per job.', stat: `${state.scheduling.jobs.length} job programme(s)` },
     { key:'finance', icon:'💰', title:'Finance', desc:'Overhead audit, cash flow snapshot, job margin & risk, variations.', stat: `${formatCurrency(ovTotal)}/mo overhead · ${varCount} variation(s) pending` },
     { key:'marketing', icon:'📈', title:'Marketing & Growth', desc:'Website/SEO, ad performance, referral tracking.', stat: `${state.marketing.referrals.length} referral source(s)` },
-    { key:'director', icon:'🛠️', title:'Director / Tools', desc:'Tech stack map, issues & lessons learned log.', stat: `${state.director.techStack.length} tools tracked` }
+    { key:'director', icon:'🛠️', title:'Director / Tools', desc:'Tech stack map, issues & lessons learned log.', stat: `${state.director.techStack.length} tools tracked` },
+    { key:'sitediary', icon:'📔', title:'Site Diary', desc:'Daily diary/reminders plus a lessons-learned journal — a quick end-of-arvo habit.', stat: `${state.siteDiary.dailyEntries.length} diary entr${state.siteDiary.dailyEntries.length===1?'y':'ies'}` },
+    { key:'todos', icon:'✅', title:'To-Do List', desc:'A running list for the business.', stat: `${openTodos} open task${openTodos===1?'':'s'}` }
   ];
   main.innerHTML = `
     <div class="home-header">
@@ -1365,7 +1419,7 @@ function renderDirector(main){
 
     <div class="panel">
       <h3>Issues / Lessons Learned Log</h3>
-      <p class="panel-desc">Quick record of what went wrong and what to change next time — the most valuable column is "Lesson".</p>
+      <p class="panel-desc">Formal per-incident record — what happened, what fixed it, what changed. For a quick daily habit, see Site Diary instead.</p>
       ${renderTable('director.issuesLog', [
         { field:'date', label:'Date', type:'date' },
         { field:'job', label:'Job', type:'text' },
@@ -1378,7 +1432,110 @@ function renderDirector(main){
 }
 
 /* ---------------------------------------------------------------
-   15. INIT
+   15. SITE DIARY
+--------------------------------------------------------------- */
+let siteDiaryTab = 'daily';
+function renderSiteDiary(main){
+  main.innerHTML = `
+    <div class="section-head">
+      <div><h1>Site Diary</h1><p>A quick daily habit — what happened, what's coming up, and the lessons worth remembering. Not a formal record, just reminders to yourself.</p></div>
+    </div>
+    <div class="subnav">
+      <button class="subnav-btn ${siteDiaryTab==='daily'?'active':''}" onclick="setSiteDiaryTab('daily')">Daily Diary</button>
+      <button class="subnav-btn ${siteDiaryTab==='lessons'?'active':''}" onclick="setSiteDiaryTab('lessons')">Lessons Learned</button>
+    </div>
+    <div id="sitediary-body"></div>
+  `;
+  renderSiteDiaryBody();
+}
+function setSiteDiaryTab(tab){ siteDiaryTab = tab; renderSiteDiary(document.getElementById('main')); }
+function renderSiteDiaryBody(){
+  const body = document.getElementById('sitediary-body');
+  if(siteDiaryTab === 'daily'){
+    body.innerHTML = `
+      <div class="panel">
+        <h3>Daily Diary</h3>
+        <p class="panel-desc">What went down today, what to follow up on, what to look forward to tomorrow.</p>
+        ${renderJournal('siteDiary.dailyEntries', { addLabel:"+ Add today's entry", placeholder:"What happened today, what to follow up on, what to look forward to..." })}
+      </div>
+    `;
+  } else {
+    body.innerHTML = `
+      <div class="panel">
+        <h3>Lessons Learned</h3>
+        <p class="panel-desc">Job site things worth remembering — a quick end-of-arvo habit.</p>
+        ${renderJournal('siteDiary.lessonsEntries', { addLabel:'+ Add lesson', placeholder:'What went wrong, what went right, what to change next time...' })}
+      </div>
+    `;
+  }
+}
+
+/* ---------------------------------------------------------------
+   16. TO-DO LIST
+--------------------------------------------------------------- */
+let todoFilter = 'open';
+function renderTodos(main){
+  const openCount = state.todos.filter(t=>!t.done).length;
+  main.innerHTML = `
+    <div class="section-head">
+      <div><h1>To-Do List</h1><p>A running list for the business — not job-specific tasks (those live on the job's own programme in Scheduling).</p></div>
+    </div>
+    <div class="panel">
+      <div class="todo-add-row">
+        <div class="field"><label class="field-label">New task</label><input type="text" id="todo-new-text" placeholder="e.g. Chase HBCF cert for Client B job" onkeydown="if(event.key==='Enter') addTodo()"></div>
+        <div class="field"><label class="field-label">Due (optional)</label><input type="date" id="todo-new-due"></div>
+        <div class="field"><label class="field-label">Priority</label>
+          <select id="todo-new-priority"><option>Low</option><option selected>Medium</option><option>High</option></select>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="addTodo()">+ Add task</button>
+      </div>
+    </div>
+    <div class="subnav">
+      <button class="subnav-btn ${todoFilter==='open'?'active':''}" onclick="setTodoFilter('open')">Open (${openCount})</button>
+      <button class="subnav-btn ${todoFilter==='done'?'active':''}" onclick="setTodoFilter('done')">Done</button>
+      <button class="subnav-btn ${todoFilter==='all'?'active':''}" onclick="setTodoFilter('all')">All</button>
+    </div>
+    <div class="panel" id="todo-list-panel">${renderTodoRows()}</div>
+  `;
+}
+function renderTodoRows(){
+  const indexed = state.todos.map((t,i)=>({t,i}));
+  const filtered = todoFilter === 'all' ? indexed : indexed.filter(x => todoFilter === 'done' ? x.t.done : !x.t.done);
+  if(!filtered.length) return `<p class="muted">Nothing here.</p>`;
+  return `<div class="todo-list">${filtered.map(({t,i})=>`
+    <div class="todo-row ${t.done?'is-done':''}">
+      <input type="checkbox" onchange="toggleTodoDone(${i})" ${t.done?'checked':''}>
+      <input type="text" class="todo-text-input" data-path="todos.${i}.text" value="${escapeHtml(t.text)}">
+      <input type="date" data-path="todos.${i}.due" value="${escapeHtml(t.due)}">
+      <select data-path="todos.${i}.priority" data-pill="true" class="${statusClass(t.priority)}">
+        ${['Low','Medium','High'].map(p=>`<option ${p===t.priority?'selected':''}>${p}</option>`).join('')}
+      </select>
+      <button type="button" class="icon-btn danger" title="Delete task" onclick="deleteRow('todos',${i})">✕</button>
+    </div>
+  `).join('')}</div>`;
+}
+function addTodo(){
+  const textEl = document.getElementById('todo-new-text');
+  const text = textEl.value.trim();
+  if(!text){ textEl.focus(); return; }
+  state.todos.push({
+    text,
+    done: false,
+    due: document.getElementById('todo-new-due').value,
+    priority: document.getElementById('todo-new-priority').value
+  });
+  scheduleSave();
+  renderTodos(document.getElementById('main'));
+}
+function toggleTodoDone(i){
+  state.todos[i].done = !state.todos[i].done;
+  scheduleSave();
+  renderTodos(document.getElementById('main'));
+}
+function setTodoFilter(f){ todoFilter = f; renderTodos(document.getElementById('main')); }
+
+/* ---------------------------------------------------------------
+   17. INIT
 --------------------------------------------------------------- */
 buildSideNav();
 renderRoute();
