@@ -422,8 +422,8 @@ const DEFAULT_DATA = {
 
   pipeline: {
     activeJobs: [
-      { client: 'Client A', address: '123 Example St, Cabarita Beach', type: 'Bathroom Renovation', stage: 'In Progress', start: '', finish: '', value: 25000 },
-      { client: 'Client B', address: '45 Sample Rd, Pottsville', type: 'Deck', stage: 'Scheduled', start: '', finish: '', value: 14000 }
+      { id: 'job-sample-a', client: 'Client A', address: '123 Example St, Cabarita Beach', type: 'Bathroom Renovation', stage: 'In Progress', start: '', finish: '', value: 25000 },
+      { id: 'job-sample-b', client: 'Client B', address: '45 Sample Rd, Pottsville', type: 'Deck', stage: 'Scheduled', start: '', finish: '', value: 14000 }
     ],
     leads: [
       { client: 'Prospect C', address: '9 Placeholder Ave, Kingscliff', buildType: 'Kitchen Renovation', inquiryDate: '', status: 'Initial Contact', contactPhone: '', notes: 'Sample lead row — edit or delete.' },
@@ -465,6 +465,11 @@ const DEFAULT_DATA = {
         ]
       }
     ]
+  },
+
+  siteTime: {
+    selectedJobId: null,
+    logs: {}
   },
 
   finance: {
@@ -575,6 +580,8 @@ function loadState(){
     if(!raw) return structuredClone(DEFAULT_DATA);
     const merged = mergeDeep(DEFAULT_DATA, JSON.parse(raw));
     delete merged.director; // retired section — drop any leftover saved data from older versions of this file
+    // Active jobs saved before Site Time existed won't have a stable id yet — Site Time links to jobs by id, not array position.
+    merged.pipeline.activeJobs.forEach(job => { if(!job.id) job.id = uid(); });
     return merged;
   }catch(e){
     console.error('Failed to load saved data, falling back to sample data.', e);
@@ -640,6 +647,7 @@ function setPath(obj, path, value){
 function escapeHtml(str){
   return String(str==null?'':str).replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));
 }
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
 function formatCurrency(n){
   const num = Number(n)||0;
   return '$' + num.toLocaleString('en-AU', {maximumFractionDigits:0});
@@ -836,7 +844,7 @@ function pickDate(iso){
 --------------------------------------------------------------- */
 const TABLE_TEMPLATES = {
   'pipeline.leads': () => ({ client:'', address:'', buildType:'Bathroom Renovation', inquiryDate:'', status:'Initial Contact', contactPhone:'', notes:'' }),
-  'pipeline.activeJobs': () => ({ client:'', address:'', type:'Bathroom Renovation', stage:'Contracted', start:'', finish:'', value:0 }),
+  'pipeline.activeJobs': () => ({ id: uid(), client:'', address:'', type:'Bathroom Renovation', stage:'Contracted', start:'', finish:'', value:0 }),
   'estimating.quotesLog': () => ({ job:'', dateSent:'', value:0, status:'Sent' }),
   'finance.overheads.categories': () => ({ name:'', monthly:0 }),
   'finance.cashFlow.months': () => ({ month:'', in:0, out:0 }),
@@ -852,6 +860,7 @@ function getTemplate(path){
   if(TABLE_TEMPLATES[path]) return TABLE_TEMPLATES[path]();
   if(/^scheduling\.jobs\.\d+\.tasks$/.test(path)) return { trade:'', start:'', finish:'' };
   if(/^contacts\.trades\.\d+\.contacts$/.test(path)) return { name:'', company:'', phone:'', email:'', hourlyRate:0, notes:'' };
+  if(/^siteTime\.logs\.[^.]+$/.test(path)) return { trade:'', weekEnding:'', hours:0, notes:'' };
   return {};
 }
 function addRow(path, opts={}){
@@ -1011,6 +1020,12 @@ function updateAllComputedSummaries(){
   const cf = state.finance.cashFlow;
   const net = (Number(cf.currentBankBalance)||0) + (Number(cf.outstandingInvoices)||0) - (Number(cf.upcomingBills)||0);
   setText('cf-net', formatCurrency(net));
+
+  if(state.siteTime.selectedJobId){
+    const rows = state.siteTime.logs[state.siteTime.selectedJobId] || [];
+    const totalHours = rows.reduce((s,r)=>s+(Number(r.hours)||0),0);
+    setText('sitetime-total-hours', totalHours);
+  }
 }
 
 /* ---------------------------------------------------------------
@@ -1022,6 +1037,7 @@ const ROUTES = [
   { key:'pipeline', label:'Job Pipeline', icon:'📋', render: renderPipeline },
   { key:'estimating', label:'Estimating & Quoting', icon:'🧮', render: renderEstimating },
   { key:'scheduling', label:'Scheduling', icon:'📅', render: renderScheduling },
+  { key:'sitetime', label:'Site Time', icon:'⏱️', render: renderSiteTime },
   { key:'finance', label:'Finance', icon:'💰', render: renderFinance },
   { key:'marketing', label:'Marketing & Growth', icon:'📈', render: renderMarketing },
   { key:'contacts', label:'Contacts', icon:'📇', render: renderContacts },
@@ -1057,11 +1073,13 @@ function renderHome(main){
   const varCount = state.finance.variations.filter(v=>v.status==='Pending').length;
   const openTodos = state.todos.filter(t=>!t.done).length;
   const tradeContactCount = state.contacts.trades.reduce((s,t)=>s+t.contacts.length,0);
+  const totalHoursLogged = Object.values(state.siteTime.logs).reduce((s,rows)=>s+rows.reduce((s2,r)=>s2+(Number(r.hours)||0),0),0);
   const cards = [
     { key:'business', icon:'🏗️', title:'The Business', desc:'Vision & goals, build process, systems guide, compliance & licensing.', stat: 'Lic. 480112C · $20M PL' },
     { key:'pipeline', icon:'📋', title:'Job Pipeline', desc:'Active jobs, pipeline planner, leads & enquiries tracker.', stat: `${jobCount} active job${jobCount===1?'':'s'} · ${leadCount} lead${leadCount===1?'':'s'}` },
     { key:'estimating', icon:'🧮', title:'Estimating & Quoting', desc:'PriceBook reference, workflow checklists, quotes log.', stat: `${state.estimating.quotesLog.length} quote(s) logged` },
     { key:'scheduling', icon:'📅', title:'Scheduling', desc:'Programme / Gantt overview per job.', stat: `${state.scheduling.jobs.length} job programme(s)` },
+    { key:'sitetime', icon:'⏱️', title:'Site Time', desc:'Trade hours by week, per active job.', stat: `${totalHoursLogged} hour${totalHoursLogged===1?'':'s'} logged` },
     { key:'finance', icon:'💰', title:'Finance', desc:'Overhead audit, cash flow snapshot, job margin & risk, variations.', stat: `${formatCurrency(ovTotal)}/mo overhead · ${varCount} variation(s) pending` },
     { key:'marketing', icon:'📈', title:'Marketing & Growth', desc:'Website/SEO, ad performance, referral tracking.', stat: `${state.marketing.referrals.length} referral source(s)` },
     { key:'contacts', icon:'📇', title:'Contacts', desc:'Trade contacts by category, plus a supplier directory.', stat: `${tradeContactCount} trade contact(s) · ${state.contacts.suppliers.length} supplier(s)` },
@@ -1534,7 +1552,61 @@ function startBarDrag(e, taskIdx){
 }
 
 /* ---------------------------------------------------------------
-   13. FINANCE
+   13. SITE TIME
+   Job selector here reads directly from pipeline.activeJobs (by id),
+   so it always matches Job Pipeline's Active Jobs — there's no
+   separate job list to keep in sync. Trade options read from
+   Contacts > Trades categories for the same reason.
+--------------------------------------------------------------- */
+function renderSiteTime(main){
+  const jobs = state.pipeline.activeJobs;
+  if(!state.siteTime.selectedJobId || !jobs.find(j=>j.id===state.siteTime.selectedJobId)){
+    state.siteTime.selectedJobId = jobs.length ? jobs[0].id : null;
+  }
+  const jobId = state.siteTime.selectedJobId;
+  if(jobId && !state.siteTime.logs[jobId]) state.siteTime.logs[jobId] = [];
+  const job = jobs.find(j=>j.id===jobId);
+  const tradeOptions = state.contacts.trades.map(t=>t.category).filter(Boolean);
+  const rows = jobId ? (state.siteTime.logs[jobId] || []) : [];
+  const totalHours = rows.reduce((s,r)=>s+(Number(r.hours)||0),0);
+
+  main.innerHTML = `
+    <div class="section-head">
+      <div><h1>Site Time</h1><p>Trade hours by week, per active job. The job list here always matches Job Pipeline → Active Jobs.</p></div>
+    </div>
+    <div class="panel">
+      ${jobs.length === 0 ? `<p class="muted">No active jobs yet — add one in Job Pipeline → Active Jobs first, then it'll show up here.</p>` : `
+        <div class="field" style="max-width:380px;">
+          <label class="field-label">Active job</label>
+          <select onchange="selectSiteTimeJob(this.value)">
+            ${jobs.map(j=>`<option value="${j.id}" ${j.id===jobId?'selected':''}>${escapeHtml(j.client||'Untitled')} — ${escapeHtml(j.address||'')}</option>`).join('')}
+          </select>
+        </div>
+        ${job ? `
+          <div class="stat-row" style="margin-top:14px;">
+            <div class="stat-card"><div class="stat-label">Total hours logged</div><div class="stat-value" id="sitetime-total-hours">${totalHours}</div></div>
+          </div>
+          ${tradeOptions.length === 0 ? `<p class="muted">No trade categories set up yet — add some in Contacts → Trades to populate the dropdown here.</p>` : ''}
+          ${renderTable(`siteTime.logs.${jobId}`, [
+            { field:'trade', label:'Trade', type: tradeOptions.length ? 'select' : 'text', options: tradeOptions },
+            { field:'weekEnding', label:'Week Ending', type:'date' },
+            { field:'hours', label:'Hours', type:'number' },
+            { field:'notes', label:'Notes', type:'textarea' }
+          ], { addLabel:'+ Add trade hours' })}
+        ` : ''}
+      `}
+    </div>
+  `;
+}
+function selectSiteTimeJob(jobId){
+  state.siteTime.selectedJobId = jobId;
+  if(!state.siteTime.logs[jobId]) state.siteTime.logs[jobId] = [];
+  scheduleSave();
+  renderSiteTime(document.getElementById('main'));
+}
+
+/* ---------------------------------------------------------------
+   14. FINANCE
 --------------------------------------------------------------- */
 let financeTab = 'overheads';
 function renderFinance(main){
@@ -1646,7 +1718,7 @@ function renderFinanceBody(){
 }
 
 /* ---------------------------------------------------------------
-   14. MARKETING & GROWTH
+   15. MARKETING & GROWTH
 --------------------------------------------------------------- */
 function renderMarketing(main){
   const w = state.marketing.website;
@@ -1691,7 +1763,7 @@ function renderMarketing(main){
 }
 
 /* ---------------------------------------------------------------
-   15. CONTACTS
+   16. CONTACTS
 --------------------------------------------------------------- */
 let contactsTab = 'trades';
 function renderContacts(main){
@@ -1783,7 +1855,7 @@ function deleteTradeCategory(){
 }
 
 /* ---------------------------------------------------------------
-   16. SITE DIARY
+   17. SITE DIARY
 --------------------------------------------------------------- */
 let siteDiaryTab = 'daily';
 function renderSiteDiary(main){
@@ -1822,7 +1894,7 @@ function renderSiteDiaryBody(){
 }
 
 /* ---------------------------------------------------------------
-   17. TO-DO LIST
+   18. TO-DO LIST
 --------------------------------------------------------------- */
 let todoFilter = 'open';
 function renderTodos(main){
@@ -1886,7 +1958,7 @@ function toggleTodoDone(i){
 function setTodoFilter(f){ todoFilter = f; renderTodos(document.getElementById('main')); }
 
 /* ---------------------------------------------------------------
-   18. INIT
+   19. INIT
 --------------------------------------------------------------- */
 buildSideNav();
 renderRoute();
