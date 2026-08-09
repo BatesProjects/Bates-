@@ -1,0 +1,1387 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bates Projects — Business Dashboard</title>
+<style>
+  :root{
+    --bg: #0d0f14;
+    --bg-elevated: #12151d;
+    --bg-card: #1a1f2b;
+    --bg-input: #10131a;
+    --border: #2a3040;
+    --border-soft: #232936;
+    --text: #e9ebf0;
+    --text-dim: #9aa3b5;
+    --text-faint: #6b7386;
+    --accent: #ff8a3d;
+    --accent-dim: #c96a2c;
+    --accent-soft: rgba(255,138,61,0.12);
+    --teal: #4fd1c5;
+    --success: #6fcf97;
+    --warning: #f2c94c;
+    --danger: #ef5b5b;
+    --radius: 10px;
+    --radius-sm: 6px;
+    font-size: 15px;
+  }
+  *{ box-sizing: border-box; }
+  html,body{ margin:0; padding:0; height:100%; }
+  body{
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    display:flex;
+    min-height:100vh;
+  }
+  a{ color: inherit; text-decoration:none; }
+  h1,h2,h3,h4{ margin:0 0 4px 0; font-weight:700; letter-spacing:-0.01em; }
+  p{ margin:0 0 10px 0; }
+  .muted{ color: var(--text-dim); }
+  .faint{ color: var(--text-faint); font-size:12.5px; }
+
+  /* ---------- Layout ---------- */
+  #sidebar{
+    width: 236px;
+    flex-shrink:0;
+    background: var(--bg-elevated);
+    border-right: 1px solid var(--border-soft);
+    display:flex;
+    flex-direction:column;
+    padding: 18px 12px;
+    position: sticky;
+    top:0;
+    height:100vh;
+  }
+  .brand{
+    padding: 6px 10px 18px 10px;
+    border-bottom: 1px solid var(--border-soft);
+    margin-bottom: 14px;
+  }
+  .brand .logo-row{ display:flex; align-items:center; gap:8px; }
+  .brand .logo-mark{
+    width:30px; height:30px; border-radius:7px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-dim));
+    display:flex; align-items:center; justify-content:center;
+    font-size:16px; flex-shrink:0;
+  }
+  .brand .name{ font-size:15px; font-weight:800; line-height:1.15; }
+  .brand .sub{ font-size:11.5px; color: var(--text-dim); margin-top:2px; }
+
+  nav.side-nav{ flex:1; display:flex; flex-direction:column; gap:2px; }
+  .nav-link{
+    display:flex; align-items:center; gap:10px;
+    padding: 9px 10px; border-radius: var(--radius-sm);
+    color: var(--text-dim); font-size:13.5px; font-weight:600;
+    cursor:pointer; border:1px solid transparent;
+  }
+  .nav-link .ic{ font-size:16px; width:20px; text-align:center; }
+  .nav-link:hover{ background: var(--bg-card); color: var(--text); }
+  .nav-link.active{ background: var(--accent-soft); color: var(--accent); border-color: rgba(255,138,61,0.25); }
+
+  .sidebar-footer{ border-top:1px solid var(--border-soft); padding-top:12px; margin-top:10px; }
+  .sidebar-footer .btn-row{ display:flex; gap:6px; margin-bottom:8px; }
+
+  #shell{ flex:1; min-width:0; display:flex; flex-direction:column; }
+  #topbar{
+    display:flex; align-items:center; justify-content:space-between;
+    padding: 14px 26px; border-bottom: 1px solid var(--border-soft);
+    background: var(--bg-elevated);
+    position: sticky; top:0; z-index: 5;
+  }
+  #topbar .title-block .page-title{ font-size:18px; }
+  #topbar .title-block .page-crumb{ font-size:12px; color:var(--text-faint); }
+  #topbar .top-actions{ display:flex; align-items:center; gap:10px; }
+  #saved-indicator{ font-size:11.5px; color: var(--text-faint); }
+
+  #main{ flex:1; padding: 26px; max-width: 1180px; width:100%; margin:0 auto; }
+
+  /* ---------- Buttons / inputs ---------- */
+  .btn{
+    display:inline-flex; align-items:center; gap:6px;
+    background: var(--bg-card); color: var(--text);
+    border:1px solid var(--border); padding: 8px 14px;
+    border-radius: var(--radius-sm); font-size:13px; font-weight:600;
+    cursor:pointer;
+  }
+  .btn:hover{ border-color: var(--accent); }
+  .btn-primary{ background: var(--accent); border-color: var(--accent); color:#1a1105; }
+  .btn-primary:hover{ background: #ff9a55; }
+  .btn-ghost{ background: transparent; }
+  .btn-sm{ padding:6px 10px; font-size:12.5px; }
+  .icon-btn{
+    background:transparent; border:1px solid var(--border); color: var(--text-dim);
+    width:28px; height:28px; border-radius:6px; cursor:pointer; font-size:13px;
+    display:inline-flex; align-items:center; justify-content:center;
+  }
+  .icon-btn:hover{ color: var(--text); border-color: var(--text-dim); }
+  .icon-btn.danger:hover{ color: var(--danger); border-color: var(--danger); }
+
+  input[type=text], input[type=number], input[type=date], input[type=tel], textarea, select{
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: var(--radius-sm);
+    padding: 7px 9px;
+    font-size: 13px;
+    font-family: inherit;
+    width: 100%;
+  }
+  textarea{ resize: vertical; min-height: 34px; }
+  input:focus, textarea:focus, select:focus{ outline:none; border-color: var(--accent); }
+  label.field-label{ display:block; font-size:11.5px; text-transform:uppercase; letter-spacing:0.04em; color:var(--text-faint); margin-bottom:5px; font-weight:700; }
+  .field{ margin-bottom:14px; }
+  .field-row{ display:grid; grid-template-columns: repeat(auto-fit, minmax(180px,1fr)); gap:14px; }
+
+  /* ---------- Home grid ---------- */
+  .home-header{ margin-bottom:22px; }
+  .home-header h1{ font-size:24px; }
+  .card-grid{
+    display:grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap:16px;
+  }
+  .nav-card{
+    background: var(--bg-card); border:1px solid var(--border-soft);
+    border-radius: var(--radius); padding:18px; cursor:pointer;
+    display:flex; flex-direction:column; gap:10px;
+    transition: border-color .12s, transform .12s;
+  }
+  .nav-card:hover{ border-color: var(--accent); transform: translateY(-1px); }
+  .nav-card .card-icon{ font-size: 26px; }
+  .nav-card h3{ font-size:15.5px; }
+  .nav-card p{ font-size:12.5px; color: var(--text-dim); margin-bottom:0; }
+  .nav-card .card-stat{ font-size:11.5px; color: var(--accent); font-weight:700; margin-top:auto; padding-top:8px; border-top:1px dashed var(--border-soft); }
+
+  /* ---------- Section chrome ---------- */
+  .section-head{ display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:20px; }
+  .section-head h1{ font-size:21px; }
+  .section-head p{ color: var(--text-dim); font-size:13px; max-width:640px; }
+  .back-link{ font-size:12.5px; color: var(--text-dim); margin-bottom:10px; display:inline-block; cursor:pointer; }
+  .back-link:hover{ color: var(--accent); }
+
+  .subnav{ display:flex; gap:6px; flex-wrap:wrap; margin-bottom:20px; border-bottom:1px solid var(--border-soft); padding-bottom:10px; }
+  .subnav-btn{
+    background: transparent; border:1px solid var(--border); color: var(--text-dim);
+    padding:7px 12px; border-radius: 999px; font-size:12.5px; font-weight:600; cursor:pointer;
+  }
+  .subnav-btn.active{ background: var(--accent-soft); color: var(--accent); border-color: rgba(255,138,61,0.3); }
+
+  .panel{
+    background: var(--bg-card); border:1px solid var(--border-soft);
+    border-radius: var(--radius); padding:20px; margin-bottom:18px;
+  }
+  .panel h3{ font-size:14.5px; margin-bottom:4px; }
+  .panel .panel-desc{ font-size:12px; color:var(--text-dim); margin-bottom:14px; }
+  .panel-grid{ display:grid; grid-template-columns: repeat(auto-fit, minmax(320px,1fr)); gap:16px; }
+
+  /* ---------- Tables ---------- */
+  .table-scroll{ overflow-x:auto; margin-bottom:10px; }
+  table.data-table{ width:100%; border-collapse: collapse; min-width: 560px; }
+  table.data-table th{
+    text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:0.03em;
+    color: var(--text-faint); padding:6px 8px; border-bottom:1px solid var(--border);
+    font-weight:700; white-space:nowrap;
+  }
+  table.data-table td{ padding:5px 6px; border-bottom:1px solid var(--border-soft); vertical-align:middle; }
+  table.data-table td.col-actions{ width:34px; }
+  table.data-table input, table.data-table select, table.data-table textarea{
+    background: transparent; border:1px solid transparent; padding:6px 6px;
+  }
+  table.data-table input:hover, table.data-table select:hover, table.data-table textarea:hover{ border-color: var(--border); }
+  table.data-table input:focus, table.data-table select:focus, table.data-table textarea:focus{ background: var(--bg-input); border-color: var(--accent); }
+  table.data-table textarea{ min-height:30px; }
+  td.computed-cell{ font-weight:700; font-size:13px; color: var(--teal); white-space:nowrap; padding-left:8px; }
+  .empty-row{ text-align:center; color: var(--text-faint); padding:16px !important; font-size:12.5px; }
+
+  select[data-pill]{ font-weight:700; }
+  .pill-success{ color: var(--success) !important; border-color: rgba(111,207,151,0.4) !important; }
+  .pill-warning{ color: var(--warning) !important; border-color: rgba(242,201,76,0.4) !important; }
+  .pill-danger{ color: var(--danger) !important; border-color: rgba(239,91,91,0.4) !important; }
+  .pill-neutral{ color: var(--text-dim) !important; }
+
+  /* ---------- Stat cards ---------- */
+  .stat-row{ display:grid; grid-template-columns: repeat(auto-fit, minmax(160px,1fr)); gap:12px; margin-bottom:16px; }
+  .stat-card{ background: var(--bg-input); border:1px solid var(--border-soft); border-radius: var(--radius-sm); padding:14px; }
+  .stat-label{ font-size:11px; text-transform:uppercase; letter-spacing:0.03em; color:var(--text-faint); font-weight:700; margin-bottom:6px; }
+  .stat-value{ font-size:20px; font-weight:800; color: var(--accent); }
+
+  /* ---------- Bars (overhead breakdown) ---------- */
+  .bar-list{ display:flex; flex-direction:column; gap:10px; }
+  .bar-item .bar-item-top{ display:flex; justify-content:space-between; font-size:12.5px; margin-bottom:4px; }
+  .bar-track{ background: var(--bg-input); border-radius:6px; height:8px; overflow:hidden; }
+  .bar-fill{ background: linear-gradient(90deg, var(--accent-dim), var(--accent)); height:100%; border-radius:6px; }
+
+  /* ---------- Process steps ---------- */
+  .process-steps{ display:flex; flex-direction:column; gap:0; }
+  .process-step{ display:flex; gap:14px; padding: 10px 0; border-bottom: 1px dashed var(--border-soft); }
+  .process-step:last-child{ border-bottom:none; }
+  .process-step .step-num{
+    width:30px; height:30px; border-radius:50%; background: var(--accent-soft); color:var(--accent);
+    display:flex; align-items:center; justify-content:center; font-weight:800; font-size:12.5px; flex-shrink:0;
+  }
+  .process-step .step-title{ font-size:13.5px; font-weight:700; margin-bottom:2px; }
+  .process-step .step-detail{ font-size:12.5px; color: var(--text-dim); }
+
+  /* ---------- Checklist ---------- */
+  .checklist-item{ display:flex; align-items:flex-start; gap:8px; padding:6px 0; font-size:13px; }
+  .checklist-item input[type=checkbox]{ width:16px; height:16px; margin-top:2px; accent-color: var(--accent); }
+
+  /* ---------- Kanban ---------- */
+  .kanban{ display:flex; gap:12px; overflow-x:auto; padding-bottom:8px; }
+  .kanban-col{ background: var(--bg-input); border:1px solid var(--border-soft); border-radius: var(--radius-sm); min-width:220px; flex:1; padding:10px; }
+  .kanban-col h4{ font-size:12px; text-transform:uppercase; letter-spacing:0.03em; color: var(--text-dim); display:flex; justify-content:space-between; margin-bottom:10px; }
+  .kanban-col h4 .count{ background: var(--bg-card); border-radius:999px; padding:1px 7px; color:var(--text-faint); font-weight:700; }
+  .kanban-col.drag-over{ border-color: var(--accent); }
+  .kanban-cards{ display:flex; flex-direction:column; gap:8px; min-height: 40px; }
+  .kanban-card{
+    background: var(--bg-card); border:1px solid var(--border-soft); border-radius:8px;
+    padding:10px; cursor: grab; font-size:12.5px;
+  }
+  .kanban-card:active{ cursor: grabbing; }
+  .kanban-card .kc-title{ font-weight:700; margin-bottom:3px; }
+  .kanban-card .kc-meta{ color: var(--text-dim); font-size:11.5px; }
+  .kanban-card .kc-value{ color: var(--teal); font-weight:700; font-size:12px; margin-top:4px; }
+  .kanban-card .kc-del{ float:right; background:none; border:none; color:var(--text-faint); cursor:pointer; font-size:12px; }
+  .kanban-add{ margin-top:12px; background: var(--bg-card); border:1px dashed var(--border); border-radius: var(--radius-sm); padding:12px; }
+  .kanban-add .field-row{ margin-bottom:8px; }
+
+  /* ---------- Gantt ---------- */
+  .gantt-wrap{ overflow-x:auto; }
+  .gantt-chart{ min-width: 100%; }
+  .gantt-scale{ font-size:11.5px; color: var(--text-faint); margin-bottom:10px; }
+  .gantt-rows{ display:flex; flex-direction:column; gap:6px; }
+  .gantt-row{ display:flex; align-items:center; gap:10px; }
+  .gantt-row-label{ width:170px; flex-shrink:0; font-size:12.5px; color:var(--text-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .gantt-row-track{ position:relative; display:grid; height:26px; background: var(--bg-input); border-radius:5px; flex:1; min-width:400px; }
+  .gantt-day-col{ border-right:1px solid var(--border-soft); }
+  .gantt-day-col.weekend{ background: rgba(255,255,255,0.02); }
+  .gantt-bar{
+    grid-row:1; background: linear-gradient(90deg, var(--accent-dim), var(--accent));
+    border-radius:5px; display:flex; align-items:center; justify-content:center;
+    color:#1a1105; font-size:10.5px; font-weight:800; z-index:1; min-width: 18px;
+  }
+
+  /* ---------- Compliance ---------- */
+  .compliance-item{ display:flex; gap:12px; }
+  .compliance-item .ci-icon{ font-size:20px; flex-shrink:0; }
+  .compliance-item .ci-title{ font-size:13.5px; font-weight:700; }
+  .compliance-item .ci-body{ font-size:12.5px; color:var(--text-dim); }
+
+  footer.app-footer{ text-align:center; padding: 20px; color: var(--text-faint); font-size:11.5px; }
+
+  @media (max-width: 860px){
+    body{ flex-direction:column; }
+    #sidebar{ position:relative; height:auto; width:100%; flex-direction:row; align-items:center; overflow-x:auto; }
+    .brand{ border-bottom:none; border-right:1px solid var(--border-soft); margin-bottom:0; padding-right:14px; }
+    nav.side-nav{ flex-direction:row; }
+    .sidebar-footer{ display:none; }
+    #main{ padding:16px; }
+  }
+</style>
+</head>
+<body>
+
+<aside id="sidebar">
+  <div class="brand">
+    <div class="logo-row">
+      <div class="logo-mark">🏗️</div>
+      <div>
+        <div class="name">Bates Projects</div>
+        <div class="sub">Cabarita Beach · Tweed Coast &amp; Northern Rivers</div>
+      </div>
+    </div>
+  </div>
+  <nav class="side-nav" id="side-nav"></nav>
+  <div class="sidebar-footer">
+    <div class="btn-row">
+      <button class="icon-btn" title="Export backup (JSON)" onclick="exportData()">⭳</button>
+      <button class="icon-btn" title="Import backup (JSON)" onclick="document.getElementById('import-file').click()">⭱</button>
+      <button class="icon-btn danger" title="Reset all data to sample data" onclick="resetAllData()">↺</button>
+    </div>
+    <input type="file" id="import-file" accept="application/json" style="display:none" onchange="importData(event)">
+    <div class="faint">Lic. 480112C · Data stored only in this browser</div>
+  </div>
+</aside>
+
+<div id="shell">
+  <div id="topbar">
+    <div class="title-block">
+      <div class="page-title" id="page-title">Dashboard</div>
+      <div class="page-crumb" id="page-crumb">Home</div>
+    </div>
+    <div class="top-actions">
+      <span id="saved-indicator">—</span>
+    </div>
+  </div>
+  <div id="main"></div>
+  <footer class="app-footer">Bates Projects Pty Ltd — internal dashboard. Local data only, not synced or published anywhere.</footer>
+</div>
+
+<script>
+/* =====================================================================
+   BATES PROJECTS — BUSINESS DASHBOARD
+   Single-file, dependency-free HTML/CSS/JS. All data lives in
+   localStorage under STORAGE_KEY. Edit DEFAULT_DATA below to change
+   what a fresh install seeds with — that never overwrites data you've
+   already saved in the browser (see mergeDeep / loadState).
+===================================================================== */
+
+const STORAGE_KEY = 'batesDashboardData_v1';
+
+/* ---------------------------------------------------------------
+   1. DEFAULT / SAMPLE DATA — all placeholder, safe to edit freely.
+--------------------------------------------------------------- */
+const DEFAULT_DATA = {
+  business: {
+    vision: {
+      statement: "Placeholder — replace with your own words: Build a reputation on the Tweed Coast / Northern Rivers as the go-to licensed builder for quality bathroom, deck and renovation work — fast turnaround on the small jobs, rock-solid delivery on the bigger renovations, zero shortcuts on compliance.",
+      goals: [
+        { term: 'Short-term (12 months)', goal: 'Keep 2–3 small jobs (bathrooms/decks) rotating at all times alongside 1 larger renovation. Target a set average turnaround on small jobs.' },
+        { term: 'Medium-term (2–3 years)', goal: 'Build a small trusted crew / regular subbie bench so I can run 2 concurrent larger renovations without bottlenecking on-site.' },
+        { term: 'Long-term (5 years)', goal: "Shift from tools-down operator to running the business, with systems (quoting, scheduling, finance) that don't depend on me remembering everything." }
+      ]
+    },
+    buildProcess: [
+      { stage: '1. Enquiry', detail: 'Client contacts via phone, website or referral. Logged in the Leads tracker the same day.' },
+      { stage: '2. Site Visit / Plans Review', detail: 'Walk the site or review DA drawings. Identify trades required, access, site constraints.' },
+      { stage: '3. Scope & Quote Dispatch', detail: 'Scope of works drafted, quotes requested from subbies/suppliers, PriceBook used for self-performed and known rates.' },
+      { stage: '4. Estimate & Proposal', detail: 'Trade breakdown compiled, margin applied, proposal sent to client.' },
+      { stage: '5. Contract & Deposit', detail: 'Contract signed, deposit taken within NSW limits, HBCF certificate obtained if the job value requires it.' },
+      { stage: '6. Pre-Start', detail: 'Programme built, materials ordered, compliance documents confirmed, site set up.' },
+      { stage: '7. Construction', detail: 'Job runs to programme, site diary kept, variations logged as they arise, progress payments claimed per contract schedule.' },
+      { stage: '8. Handover', detail: 'Final inspection, defects list cleared, handover pack (warranties/certificates) given to client, final payment.' },
+      { stage: '9. Warranty / Follow-up', detail: 'Statutory warranty period tracked, follow-up call/review, referral request.' }
+    ],
+    systemsGuide: [
+      { system: 'Job Intake', description: 'Standard process for capturing a new enquiry through to an estimate-ready scope before pricing starts.' },
+      { system: 'Rapid Quote Dispatch', description: 'Fast-turnaround process for getting plans out to trades and suppliers for pricing the moment drawings land.' },
+      { system: 'Scope of Works', description: 'One trade-specific brief per subcontractor, referencing relevant standards (AS 3740 waterproofing, AS/NZS 3500 plumbing, BAL ratings, etc).' },
+      { system: 'Estimating', description: 'Five-step build-up: extract requirements, map sub quotes, price self-performed work, compile trade breakdown, QA review.' },
+      { system: 'Scheduling', description: 'Programme built per job once contracted, tracked against actual progress.' },
+      { system: 'Site Diary', description: 'Daily/weekly record of site activity, deliveries, issues and instructions — protects against disputes.' }
+    ],
+    compliance: {
+      licence: { number: '480112C', type: "Contractor Licence — General Building Work (confirm exact class shown on your licence card)", issuer: 'NSW Fair Trading', status: 'Active', renewalDate: '', notes: 'Set your real renewal date and a reminder here.' },
+      insurance: { publicLiability: '$20,000,000', insurer: '', policyNumber: '', expiry: '', notes: 'Confirm cover is current before each new contract — clients and principals will often ask for a certificate of currency.' },
+      hbcf: { threshold: '$20,000', notes: "NSW Home Building Compensation Fund cover is required before starting work or taking any payment (including deposit) on residential work over this threshold. Verify the current threshold and process with icare / NSW Fair Trading as rules do change." },
+      homeBuildingAct: { notes: "Home Building Act 1989 (NSW) — obligations to keep front of mind: written contract required over the small-jobs threshold, statutory warranty period (currently 6 years major defects / 2 years other — verify current figures), cooling-off rights on certain contracts, deposit limits, and mandatory contract terms. This panel is a working reference, not legal advice — re-check against current NSW Fair Trading guidance periodically.", lastVerified: '' }
+    }
+  },
+
+  pipeline: {
+    activeJobs: [
+      { client: 'Client A', address: '123 Example St, Cabarita Beach', type: 'Bathroom Renovation', stage: 'In Progress', start: '', finish: '', value: 25000 },
+      { client: 'Client B', address: '45 Sample Rd, Pottsville', type: 'Deck', stage: 'Scheduled', start: '', finish: '', value: 14000 }
+    ],
+    leads: [
+      { client: 'Prospect C', address: '9 Placeholder Ave, Kingscliff', buildType: 'Kitchen Renovation', inquiryDate: '', status: 'Initial Contact', contactPhone: '', notes: 'Sample lead row — edit or delete.' },
+      { client: 'Prospect D', address: '77 Draft Cres, Tweed Heads', buildType: 'Deck', inquiryDate: '', status: 'Quote Sent', contactPhone: '', notes: '' }
+    ],
+    planner: [
+      { title: 'Bathroom reno enquiry', client: 'Prospect E', type: 'Bathroom Renovation', value: 18000, stage: 'Enquiry' },
+      { title: 'Deck rebuild', client: 'Prospect F', type: 'Deck', value: 12000, stage: 'Quoted' },
+      { title: 'Client A bathroom', client: 'Client A', type: 'Bathroom Renovation', value: 25000, stage: 'In Progress' },
+      { title: 'Client B deck', client: 'Client B', type: 'Deck', value: 14000, stage: 'Scheduled' }
+    ]
+  },
+
+  estimating: {
+    priceBook: { filePath: 'e.g. C:\\Users\\you\\Documents\\Bates Projects\\PriceBook.xlsx', notes: 'This dashboard only stores a reference to the file path/location as a reminder — it does not open local files directly for security reasons. Keep your PriceBook.xlsx as the source of truth for rates.' },
+    workflowChecklists: [
+      { name: 'Job Intake', items: [ {label:'Capture enquiry details', done:false}, {label:'Confirm site visit', done:false}, {label:'Review drawings / DA docs', done:false}, {label:'Define inclusions & exclusions', done:false}, {label:'Pass Estimate Readiness Gate', done:false} ] },
+      { name: 'Rapid Quote Dispatch', items: [ {label:'Scan plans for trades/suppliers required', done:false}, {label:'Draft quote request per trade', done:false}, {label:'Send out same day plans received', done:false} ] },
+      { name: 'Scope of Works', items: [ {label:'One brief per subcontractor', done:false}, {label:'Reference relevant standards (AS3740, AS/NZS3500, BAL etc)', done:false}, {label:'Confirm inclusions/exclusions with each sub', done:false} ] },
+      { name: 'Estimating', items: [ {label:'Extract requirements from scope', done:false}, {label:'Map subcontractor quotes', done:false}, {label:'Price self-performed work from PriceBook', done:false}, {label:'Compile trade breakdown', done:false}, {label:'QA review before sending', done:false} ] }
+    ],
+    quotesLog: [
+      { job: 'Prospect C — Kitchen Renovation', dateSent: '', value: 32000, status: 'Sent' }
+    ]
+  },
+
+  scheduling: {
+    selectedJobIndex: 0,
+    jobs: [
+      {
+        name: 'Client A — Bathroom Renovation',
+        tasks: [
+          { trade: 'Demolition', start: '', duration: 2 },
+          { trade: 'Plumbing rough-in', start: '', duration: 2 },
+          { trade: 'Waterproofing', start: '', duration: 2 },
+          { trade: 'Tiling', start: '', duration: 4 },
+          { trade: 'Electrical fit-off', start: '', duration: 1 },
+          { trade: 'Plumbing fit-off', start: '', duration: 1 }
+        ]
+      }
+    ]
+  },
+
+  finance: {
+    overheads: {
+      monthlyRevenueEstimate: 45000,
+      categories: [
+        { name: 'Vehicle (fuel, rego, maintenance)', monthly: 800 },
+        { name: 'Insurance (PL, income protection, etc.)', monthly: 450 },
+        { name: 'Tools & equipment', monthly: 200 },
+        { name: 'Software & subscriptions (Xero etc.)', monthly: 150 },
+        { name: 'Phone & office', monthly: 120 },
+        { name: 'Marketing', monthly: 300 },
+        { name: 'Accounting & legal', monthly: 250 },
+        { name: 'Super (self)', monthly: 500 },
+        { name: 'Misc / contingency', monthly: 150 }
+      ]
+    },
+    cashFlow: {
+      currentBankBalance: 18000,
+      outstandingInvoices: 32000,
+      upcomingBills: 9000,
+      months: [
+        { month: 'This month', in: 45000, out: 38000 },
+        { month: 'Next month (forecast)', in: 40000, out: 36000 },
+        { month: 'Month after (forecast)', in: 38000, out: 34000 }
+      ]
+    },
+    jobMargins: [
+      { job: 'Client A — Bathroom Renovation', contractValue: 25000, costsToDate: 14000, projectedCosts: 19000, risk: 'Low' },
+      { job: 'Client B — Deck', contractValue: 14000, costsToDate: 4000, projectedCosts: 10500, risk: 'Medium' }
+    ],
+    variations: [
+      { job: 'Client A — Bathroom Renovation', description: 'Additional waterproofing to laundry recess', value: 850, status: 'Pending', dateRaised: '' }
+    ]
+  },
+
+  marketing: {
+    website: { domain: 'e.g. batesprojects.com.au', monthlyVisitors: '', topKeywords: 'e.g. "builder Cabarita Beach", "deck builder Tweed Coast", "bathroom renovation Pottsville"', notes: '' },
+    adCampaigns: [
+      { platform: 'Google Ads', spend: 0, leads: 0, notes: '' },
+      { platform: 'Facebook / Instagram', spend: 0, leads: 0, notes: '' }
+    ],
+    referrals: [
+      { source: 'e.g. Past client — Client A', jobsReferred: 0, valueGenerated: 0, notes: '' }
+    ]
+  },
+
+  director: {
+    techStack: [
+      { category: 'Accounting', tool: 'Xero', monthlyCost: 0, notes: 'Invoicing, payroll, BAS.' },
+      { category: 'Estimating', tool: 'PriceBook.xlsx', monthlyCost: 0, notes: 'Local spreadsheet — source of truth for rates.' },
+      { category: 'Communication', tool: 'Email / phone', monthlyCost: 0, notes: '' },
+      { category: 'Documents', tool: 'e.g. Google Drive', monthlyCost: 0, notes: 'Contracts, drawings, photos.' }
+    ],
+    issuesLog: [
+      { date: '', job: 'Sample entry', issue: 'Describe what went wrong.', resolution: 'What you did about it.', lesson: 'What to change next time — this is the valuable bit.' }
+    ]
+  }
+};
+
+/* ---------------------------------------------------------------
+   2. STATE — load from localStorage, merged over DEFAULT_DATA so
+   new fields added later don't wipe what you've already entered.
+--------------------------------------------------------------- */
+function mergeDeep(base, override){
+  if(Array.isArray(base)){ return override !== undefined ? override : base; }
+  if(base && typeof base === 'object'){
+    const result = {...base};
+    if(override && typeof override === 'object'){
+      Object.keys(override).forEach(k=>{
+        result[k] = Object.prototype.hasOwnProperty.call(base,k) ? mergeDeep(base[k], override[k]) : override[k];
+      });
+    }
+    return result;
+  }
+  return override !== undefined ? override : base;
+}
+function loadState(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return structuredClone(DEFAULT_DATA);
+    return mergeDeep(DEFAULT_DATA, JSON.parse(raw));
+  }catch(e){
+    console.error('Failed to load saved data, falling back to sample data.', e);
+    return structuredClone(DEFAULT_DATA);
+  }
+}
+let state = loadState();
+
+let saveTimer = null;
+function scheduleSave(){
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveState, 350);
+}
+function saveState(){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  const el = document.getElementById('saved-indicator');
+  if(el) el.textContent = 'Saved ' + new Date().toLocaleTimeString('en-AU', {hour:'2-digit', minute:'2-digit'});
+}
+
+function exportData(){
+  const blob = new Blob([JSON.stringify(state, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  const stamp = new Date().toISOString().slice(0,10);
+  a.download = `bates-dashboard-backup-${stamp}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+}
+function importData(event){
+  const file = event.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try{
+      const parsed = JSON.parse(reader.result);
+      if(!confirm('Import this file and replace all current dashboard data?')) return;
+      state = mergeDeep(DEFAULT_DATA, parsed);
+      saveState();
+      renderRoute();
+    }catch(e){
+      alert('Could not read that file — is it a JSON backup exported from this dashboard?');
+    }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+function resetAllData(){
+  if(!confirm('Reset ALL sections back to sample data? This cannot be undone (export a backup first if unsure).')) return;
+  state = structuredClone(DEFAULT_DATA);
+  saveState();
+  renderRoute();
+}
+
+/* ---------------------------------------------------------------
+   3. HELPERS
+--------------------------------------------------------------- */
+function getPath(obj, path){ return path.split('.').reduce((o,k)=> (o==null? undefined : o[k]), obj); }
+function setPath(obj, path, value){
+  const parts = path.split('.');
+  const last = parts.pop();
+  const target = parts.reduce((o,k)=> o[k], obj);
+  target[last] = value;
+}
+function escapeHtml(str){
+  return String(str==null?'':str).replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));
+}
+function formatCurrency(n){
+  const num = Number(n)||0;
+  return '$' + num.toLocaleString('en-AU', {maximumFractionDigits:0});
+}
+function statusClass(value){
+  const v = String(value||'').toLowerCase();
+  if(/high|declined|rejected|on hold|expired/.test(v)) return 'pill-danger';
+  if(/medium|pending|sent|scheduled/.test(v)) return 'pill-warning';
+  if(/low|accepted|approved|complete|paid|in progress|active/.test(v)) return 'pill-success';
+  return 'pill-neutral';
+}
+function parseDateStr(s){ if(!s) return null; const d = new Date(s+'T00:00:00'); return isNaN(d.getTime()) ? null : d; }
+function addDays(date, n){ const d = new Date(date); d.setDate(d.getDate()+Number(n)); return d; }
+function dateDiffDays(a,b){ return Math.round((b-a)/86400000); }
+function formatDateShort(d){ return d.toLocaleDateString('en-AU', {day:'2-digit', month:'short'}); }
+
+/* ---------------------------------------------------------------
+   4. GENERIC EDITABLE TABLE
+--------------------------------------------------------------- */
+const TABLE_TEMPLATES = {
+  'pipeline.leads': () => ({ client:'', address:'', buildType:'Bathroom Renovation', inquiryDate:'', status:'Initial Contact', contactPhone:'', notes:'' }),
+  'pipeline.activeJobs': () => ({ client:'', address:'', type:'Bathroom Renovation', stage:'Contracted', start:'', finish:'', value:0 }),
+  'estimating.quotesLog': () => ({ job:'', dateSent:'', value:0, status:'Sent' }),
+  'finance.overheads.categories': () => ({ name:'', monthly:0 }),
+  'finance.cashFlow.months': () => ({ month:'', in:0, out:0 }),
+  'finance.jobMargins': () => ({ job:'', contractValue:0, costsToDate:0, projectedCosts:0, risk:'Low' }),
+  'finance.variations': () => ({ job:'', description:'', value:0, status:'Pending', dateRaised:'' }),
+  'marketing.adCampaigns': () => ({ platform:'', spend:0, leads:0, notes:'' }),
+  'marketing.referrals': () => ({ source:'', jobsReferred:0, valueGenerated:0, notes:'' }),
+  'director.techStack': () => ({ category:'', tool:'', monthlyCost:0, notes:'' }),
+  'director.issuesLog': () => ({ date:'', job:'', issue:'', resolution:'', lesson:'' })
+};
+function getTemplate(path){
+  if(TABLE_TEMPLATES[path]) return TABLE_TEMPLATES[path]();
+  if(/^scheduling\.jobs\.\d+\.tasks$/.test(path)) return { trade:'', start:'', duration:1 };
+  return {};
+}
+function addRow(path){
+  const rows = getPath(state, path);
+  rows.push(getTemplate(path));
+  scheduleSave();
+  renderRoute();
+}
+function deleteRow(path, idx){
+  if(!confirm('Delete this row?')) return;
+  const rows = getPath(state, path);
+  rows.splice(idx,1);
+  scheduleSave();
+  renderRoute();
+}
+
+const COMPUTED_COLUMNS = {
+  'finance.jobMargins': [
+    { key:'marginDollar', compute: r => formatCurrency((Number(r.contractValue)||0) - (Number(r.projectedCosts)||0)) },
+    { key:'marginPct', compute: r => { const cv = Number(r.contractValue)||0; if(!cv) return '—'; return (((cv - (Number(r.projectedCosts)||0))/cv)*100).toFixed(1)+'%'; } }
+  ],
+  'marketing.adCampaigns': [
+    { key:'costPerLead', compute: r => { const leads = Number(r.leads)||0; if(!leads) return '—'; return formatCurrency((Number(r.spend)||0)/leads); } }
+  ],
+  'finance.cashFlow.months': [
+    { key:'net', compute: r => formatCurrency((Number(r.in)||0) - (Number(r.out)||0)) }
+  ]
+};
+function computedId(tablePath, idx, key){ return 'computed-' + tablePath.replace(/\./g,'-') + '-' + idx + '-' + key; }
+
+function renderCell(col, row, i, path){
+  const p = `${path}.${i}.${col.field}`;
+  const val = row[col.field];
+  if(col.type === 'select'){
+    const opts = col.options.map(o => `<option value="${escapeHtml(o)}" ${o===val?'selected':''}>${escapeHtml(o)}</option>`).join('');
+    return `<select data-path="${p}" ${col.pill? 'data-pill="true"' : ''} class="${col.pill? statusClass(val):''}">${opts}</select>`;
+  }
+  if(col.type === 'number'){
+    return `<input type="number" step="any" data-path="${p}" value="${val===undefined||val===''?'':val}">`;
+  }
+  if(col.type === 'date'){
+    return `<input type="date" data-path="${p}" value="${escapeHtml(val)}">`;
+  }
+  if(col.type === 'textarea'){
+    return `<textarea data-path="${p}" rows="1">${escapeHtml(val)}</textarea>`;
+  }
+  return `<input type="text" data-path="${p}" value="${escapeHtml(val)}">`;
+}
+
+function renderTable(path, columns, options={}){
+  const rows = getPath(state, path) || [];
+  const bodyHtml = rows.length ? rows.map((row,i)=>{
+    const cells = columns.map(col=>{
+      if(col.type === 'computed'){
+        return `<td class="computed-cell" id="${computedId(path,i,col.key)}">${col.compute(row)}</td>`;
+      }
+      return `<td>${renderCell(col,row,i,path)}</td>`;
+    }).join('');
+    return `<tr>${cells}<td class="col-actions"><button type="button" class="icon-btn danger" title="Delete row" onclick="deleteRow('${path}',${i})">✕</button></td></tr>`;
+  }).join('') : `<tr><td colspan="${columns.length+1}" class="empty-row">No rows yet — add one below.</td></tr>`;
+  const headers = columns.map(c=>`<th>${escapeHtml(c.label)}</th>`).join('') + '<th></th>';
+  return `
+    <div class="table-scroll">
+      <table class="data-table"><thead><tr>${headers}</tr></thead><tbody>${bodyHtml}</tbody></table>
+    </div>
+    <button type="button" class="btn btn-ghost btn-sm" onclick="addRow('${path}')">${options.addLabel || '+ Add row'}</button>
+  `;
+}
+
+/* ---------------------------------------------------------------
+   5. LIVE INPUT BINDING (delegated) + computed summary refresh
+--------------------------------------------------------------- */
+function handleInput(e){
+  const target = e.target;
+  const path = target.dataset ? target.dataset.path : null;
+  if(!path) return;
+  let val;
+  if(target.type === 'checkbox') val = target.checked;
+  else if(target.type === 'number') val = target.value === '' ? '' : Number(target.value);
+  else val = target.value;
+  setPath(state, path, val);
+  scheduleSave();
+
+  if(target.tagName === 'SELECT' && target.dataset.pill === 'true'){
+    target.classList.remove('pill-success','pill-warning','pill-danger','pill-neutral');
+    target.classList.add(statusClass(val));
+  }
+  refreshComputedForPath(path);
+  updateAllComputedSummaries();
+}
+document.addEventListener('input', handleInput);
+document.addEventListener('change', handleInput);
+
+function refreshComputedForPath(path){
+  const parts = path.split('.');
+  const rowIndex = parts[parts.length - 2];
+  if(!/^\d+$/.test(rowIndex)) return;
+  const tablePath = parts.slice(0, -2).join('.');
+  const cols = COMPUTED_COLUMNS[tablePath];
+  if(!cols) return;
+  const row = getPath(state, `${tablePath}.${rowIndex}`);
+  cols.forEach(c=>{
+    const elm = document.getElementById(computedId(tablePath, rowIndex, c.key));
+    if(elm) elm.textContent = c.compute(row);
+  });
+}
+function setText(id, text){ const e = document.getElementById(id); if(e) e.textContent = text; }
+
+function updateAllComputedSummaries(){
+  const ov = state.finance.overheads;
+  const ovTotal = ov.categories.reduce((s,c)=> s + (Number(c.monthly)||0), 0);
+  const rev = Number(ov.monthlyRevenueEstimate) || 0;
+  setText('ov-monthly-total', formatCurrency(ovTotal));
+  setText('ov-annual-total', formatCurrency(ovTotal*12));
+  setText('ov-pct', rev>0 ? ((ovTotal/rev)*100).toFixed(1)+'%' : '—');
+  const total = ovTotal || 1;
+  ov.categories.forEach((c,i)=>{
+    const bar = document.getElementById('ov-bar-fill-'+i);
+    const pct = document.getElementById('ov-bar-pct-'+i);
+    const share = ((Number(c.monthly)||0)/total*100);
+    if(bar) bar.style.width = share.toFixed(1)+'%';
+    if(pct) pct.textContent = share.toFixed(0)+'%';
+  });
+
+  const cf = state.finance.cashFlow;
+  const net = (Number(cf.currentBankBalance)||0) + (Number(cf.outstandingInvoices)||0) - (Number(cf.upcomingBills)||0);
+  setText('cf-net', formatCurrency(net));
+}
+
+/* ---------------------------------------------------------------
+   6. ROUTING
+--------------------------------------------------------------- */
+const ROUTES = [
+  { key:'home', label:'Dashboard', icon:'🏠', render: renderHome },
+  { key:'business', label:'The Business', icon:'🏗️', render: renderBusiness },
+  { key:'pipeline', label:'Job Pipeline', icon:'📋', render: renderPipeline },
+  { key:'estimating', label:'Estimating & Quoting', icon:'🧮', render: renderEstimating },
+  { key:'scheduling', label:'Scheduling', icon:'📅', render: renderScheduling },
+  { key:'finance', label:'Finance', icon:'💰', render: renderFinance },
+  { key:'marketing', label:'Marketing & Growth', icon:'📈', render: renderMarketing },
+  { key:'director', label:'Director / Tools', icon:'🛠️', render: renderDirector }
+];
+function navigate(key){ location.hash = key === 'home' ? '' : key; }
+function buildSideNav(){
+  const nav = document.getElementById('side-nav');
+  nav.innerHTML = ROUTES.map(r => `<a class="nav-link" data-route="${r.key}" onclick="navigate('${r.key}')"><span class="ic">${r.icon}</span>${r.label}</a>`).join('');
+}
+function renderRoute(){
+  const hash = location.hash.replace('#','') || 'home';
+  const route = ROUTES.find(r=>r.key===hash) || ROUTES[0];
+  document.querySelectorAll('.nav-link').forEach(a => a.classList.toggle('active', a.dataset.route === route.key));
+  document.getElementById('page-title').textContent = route.label;
+  document.getElementById('page-crumb').textContent = route.key === 'home' ? 'Home' : 'Dashboard / ' + route.label;
+  const main = document.getElementById('main');
+  main.innerHTML = '';
+  route.render(main);
+  window.scrollTo(0,0);
+  updateAllComputedSummaries();
+}
+window.addEventListener('hashchange', renderRoute);
+
+/* ---------------------------------------------------------------
+   7. HOME
+--------------------------------------------------------------- */
+function renderHome(main){
+  const jobCount = state.pipeline.activeJobs.length;
+  const leadCount = state.pipeline.leads.length;
+  const ovTotal = state.finance.overheads.categories.reduce((s,c)=>s+(Number(c.monthly)||0),0);
+  const varCount = state.finance.variations.filter(v=>v.status==='Pending').length;
+  const cards = [
+    { key:'business', icon:'🏗️', title:'The Business', desc:'Vision & goals, build process, systems guide, compliance & licensing.', stat: 'Lic. 480112C · $20M PL' },
+    { key:'pipeline', icon:'📋', title:'Job Pipeline', desc:'Active jobs, pipeline planner, leads & enquiries tracker.', stat: `${jobCount} active job${jobCount===1?'':'s'} · ${leadCount} lead${leadCount===1?'':'s'}` },
+    { key:'estimating', icon:'🧮', title:'Estimating & Quoting', desc:'PriceBook reference, workflow checklists, quotes log.', stat: `${state.estimating.quotesLog.length} quote(s) logged` },
+    { key:'scheduling', icon:'📅', title:'Scheduling', desc:'Programme / Gantt overview per job.', stat: `${state.scheduling.jobs.length} job programme(s)` },
+    { key:'finance', icon:'💰', title:'Finance', desc:'Overhead audit, cash flow snapshot, job margin & risk, variations.', stat: `${formatCurrency(ovTotal)}/mo overhead · ${varCount} variation(s) pending` },
+    { key:'marketing', icon:'📈', title:'Marketing & Growth', desc:'Website/SEO, ad performance, referral tracking.', stat: `${state.marketing.referrals.length} referral source(s)` },
+    { key:'director', icon:'🛠️', title:'Director / Tools', desc:'Tech stack map, issues & lessons learned log.', stat: `${state.director.techStack.length} tools tracked` }
+  ];
+  main.innerHTML = `
+    <div class="home-header">
+      <h1>G'day — Bates Projects control centre</h1>
+      <p class="muted">Everything for running the business in one place. Click a card to open a section — all figures below are placeholders until you swap in the real numbers.</p>
+    </div>
+    <div class="card-grid">
+      ${cards.map(c=>`
+        <div class="nav-card" onclick="navigate('${c.key}')">
+          <div class="card-icon">${c.icon}</div>
+          <h3>${c.title}</h3>
+          <p>${c.desc}</p>
+          <div class="card-stat">${c.stat}</div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+/* ---------------------------------------------------------------
+   8. THE BUSINESS
+--------------------------------------------------------------- */
+function renderBusiness(main){
+  main.innerHTML = `
+    <div class="section-head">
+      <div>
+        <h1>The Business</h1>
+        <p>Vision & goals, build process, internal systems guide, and compliance & licensing reference.</p>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>Vision & Goals</h3>
+      <p class="panel-desc">Edit freely — this is your own words, not a template to keep.</p>
+      <div class="field">
+        <label class="field-label">Vision statement</label>
+        <textarea data-path="business.vision.statement" rows="4">${escapeHtml(state.business.vision.statement)}</textarea>
+      </div>
+      ${renderTable('business.vision.goals', [
+        { field:'term', label:'Horizon', type:'text' },
+        { field:'goal', label:'Goal', type:'textarea' }
+      ], { addLabel:'+ Add goal' })}
+    </div>
+
+    <div class="panel">
+      <h3>Build Process</h3>
+      <p class="panel-desc">The standard path a job takes from first contact to warranty follow-up.</p>
+      <div class="process-steps">
+        ${state.business.buildProcess.map((s,i)=>`
+          <div class="process-step">
+            <div class="step-num">${i+1}</div>
+            <div>
+              <div class="step-title">${escapeHtml(s.stage.replace(/^\d+\.\s*/,''))}</div>
+              <div class="step-detail">${escapeHtml(s.detail)}</div>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+      <p class="faint" style="margin-top:10px;">To edit these steps, update the <code>business.buildProcess</code> array near the top of the script.</p>
+    </div>
+
+    <div class="panel">
+      <h3>Systems Guide</h3>
+      <p class="panel-desc">The internal processes that keep jobs consistent — see also Director / Tools for the software behind each one.</p>
+      <div class="panel-grid">
+        ${state.business.systemsGuide.map(s=>`
+          <div class="stat-card">
+            <div class="stat-label">${escapeHtml(s.system)}</div>
+            <div style="font-size:13px; color:var(--text-dim);">${escapeHtml(s.description)}</div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>Compliance & Licensing</h3>
+      <p class="panel-desc">Working reference only — always re-check current thresholds and figures against NSW Fair Trading / icare guidance.</p>
+      <div class="panel-grid">
+        <div class="stat-card">
+          <div class="compliance-item">
+            <div class="ci-icon">🪪</div>
+            <div style="flex:1;">
+              <div class="ci-title">Builder's Licence</div>
+              <div class="field-row" style="margin-top:8px;">
+                <div class="field"><label class="field-label">Licence number</label><input type="text" data-path="business.compliance.licence.number" value="${escapeHtml(state.business.compliance.licence.number)}"></div>
+                <div class="field"><label class="field-label">Status</label><input type="text" data-path="business.compliance.licence.status" value="${escapeHtml(state.business.compliance.licence.status)}"></div>
+                <div class="field"><label class="field-label">Renewal date</label><input type="date" data-path="business.compliance.licence.renewalDate" value="${escapeHtml(state.business.compliance.licence.renewalDate)}"></div>
+              </div>
+              <div class="field"><label class="field-label">Class / notes</label><textarea data-path="business.compliance.licence.type" rows="2">${escapeHtml(state.business.compliance.licence.type)}</textarea></div>
+            </div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="compliance-item">
+            <div class="ci-icon">🛡️</div>
+            <div style="flex:1;">
+              <div class="ci-title">Public Liability Insurance</div>
+              <div class="field-row" style="margin-top:8px;">
+                <div class="field"><label class="field-label">Cover amount</label><input type="text" data-path="business.compliance.insurance.publicLiability" value="${escapeHtml(state.business.compliance.insurance.publicLiability)}"></div>
+                <div class="field"><label class="field-label">Insurer</label><input type="text" data-path="business.compliance.insurance.insurer" value="${escapeHtml(state.business.compliance.insurance.insurer)}"></div>
+                <div class="field"><label class="field-label">Policy number</label><input type="text" data-path="business.compliance.insurance.policyNumber" value="${escapeHtml(state.business.compliance.insurance.policyNumber)}"></div>
+                <div class="field"><label class="field-label">Expiry</label><input type="date" data-path="business.compliance.insurance.expiry" value="${escapeHtml(state.business.compliance.insurance.expiry)}"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="compliance-item">
+            <div class="ci-icon">🏦</div>
+            <div style="flex:1;">
+              <div class="ci-title">HBCF (Home Building Compensation Fund)</div>
+              <div class="field" style="margin-top:8px;"><label class="field-label">Threshold</label><input type="text" data-path="business.compliance.hbcf.threshold" value="${escapeHtml(state.business.compliance.hbcf.threshold)}"></div>
+              <div class="field"><label class="field-label">Notes</label><textarea data-path="business.compliance.hbcf.notes" rows="3">${escapeHtml(state.business.compliance.hbcf.notes)}</textarea></div>
+            </div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="compliance-item">
+            <div class="ci-icon">📖</div>
+            <div style="flex:1;">
+              <div class="ci-title">Home Building Act 1989 (NSW)</div>
+              <div class="field" style="margin-top:8px;"><label class="field-label">Notes / obligations</label><textarea data-path="business.compliance.homeBuildingAct.notes" rows="5">${escapeHtml(state.business.compliance.homeBuildingAct.notes)}</textarea></div>
+              <div class="field"><label class="field-label">Last verified</label><input type="date" data-path="business.compliance.homeBuildingAct.lastVerified" value="${escapeHtml(state.business.compliance.homeBuildingAct.lastVerified)}"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+/* ---------------------------------------------------------------
+   9. JOB PIPELINE
+--------------------------------------------------------------- */
+let pipelineTab = 'jobs';
+function renderPipeline(main){
+  main.innerHTML = `
+    <div class="section-head">
+      <div><h1>Job Pipeline</h1><p>Active jobs, the overall pipeline planner, and the leads/enquiries tracker.</p></div>
+    </div>
+    <div class="subnav">
+      <button class="subnav-btn ${pipelineTab==='jobs'?'active':''}" onclick="setPipelineTab('jobs')">Active Jobs</button>
+      <button class="subnav-btn ${pipelineTab==='planner'?'active':''}" onclick="setPipelineTab('planner')">Pipeline Planner</button>
+      <button class="subnav-btn ${pipelineTab==='leads'?'active':''}" onclick="setPipelineTab('leads')">Leads / Enquiries</button>
+    </div>
+    <div id="pipeline-body"></div>
+  `;
+  renderPipelineBody();
+}
+function setPipelineTab(tab){ pipelineTab = tab; renderPipeline(document.getElementById('main')); }
+function renderPipelineBody(){
+  const body = document.getElementById('pipeline-body');
+  if(pipelineTab === 'jobs'){
+    body.innerHTML = `
+      <div class="panel">
+        <h3>Active Jobs</h3>
+        <p class="panel-desc">Jobs currently contracted, pre-start or on-site.</p>
+        ${renderTable('pipeline.activeJobs', [
+          { field:'client', label:'Client', type:'text' },
+          { field:'address', label:'Address', type:'text' },
+          { field:'type', label:'Job Type', type:'select', options:['Bathroom Renovation','Deck','Kitchen Renovation','Minor Renovation','Major Renovation','New Build','Carpentry / Other'] },
+          { field:'stage', label:'Stage', type:'select', options:['Contracted','Pre-Start','In Progress','Defects / Handover'], pill:true },
+          { field:'start', label:'Start', type:'date' },
+          { field:'finish', label:'Finish', type:'date' },
+          { field:'value', label:'Contract Value', type:'number' }
+        ], { addLabel:'+ Add active job' })}
+      </div>
+    `;
+  } else if(pipelineTab === 'planner'){
+    body.innerHTML = renderKanban();
+  } else {
+    body.innerHTML = `
+      <div class="panel">
+        <h3>Leads / Enquiries Tracker</h3>
+        <p class="panel-desc">Raw enquiries before they become a contracted job.</p>
+        ${renderTable('pipeline.leads', [
+          { field:'client', label:'Client', type:'text' },
+          { field:'address', label:'Address', type:'text' },
+          { field:'buildType', label:'Build Type', type:'select', options:['Bathroom Renovation','Deck','Kitchen Renovation','Minor Renovation','Major Renovation','New Build','Carpentry / Other'] },
+          { field:'inquiryDate', label:'Enquiry Date', type:'date' },
+          { field:'status', label:'Status', type:'select', options:['Initial Contact','Meeting Scheduled','Quote Sent','Quote Accepted','Quote Declined','On Hold'], pill:true },
+          { field:'contactPhone', label:'Phone', type:'text' },
+          { field:'notes', label:'Notes', type:'textarea' }
+        ], { addLabel:'+ Add lead' })}
+      </div>
+    `;
+  }
+}
+const KANBAN_STAGES = ['Enquiry','Quoted','Contracted','Scheduled','In Progress','Complete'];
+function renderKanban(){
+  const items = state.pipeline.planner;
+  return `
+    <div class="panel">
+      <h3>Pipeline Planner</h3>
+      <p class="panel-desc">Drag cards between stages to see capacity across the whole pipeline at a glance.</p>
+      <div class="kanban">
+        ${KANBAN_STAGES.map(stage => `
+          <div class="kanban-col" data-stage="${stage}" ondragover="event.preventDefault(); this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="onKanbanDrop(event,'${stage}')">
+            <h4>${stage} <span class="count">${items.filter(i=>i.stage===stage).length}</span></h4>
+            <div class="kanban-cards">
+              ${items.map((item,i)=> item.stage===stage ? renderKanbanCard(item,i) : '').join('')}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+      <div class="kanban-add">
+        <div class="field-row">
+          <div class="field"><label class="field-label">Title</label><input type="text" id="kb-title" placeholder="e.g. Deck rebuild"></div>
+          <div class="field"><label class="field-label">Client</label><input type="text" id="kb-client" placeholder="Client name"></div>
+          <div class="field"><label class="field-label">Type</label><input type="text" id="kb-type" placeholder="e.g. Deck"></div>
+          <div class="field"><label class="field-label">Est. value</label><input type="number" id="kb-value" placeholder="0"></div>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="addKanbanCard()">+ Add to pipeline</button>
+      </div>
+    </div>
+  `;
+}
+function renderKanbanCard(item, i){
+  return `
+    <div class="kanban-card" draggable="true" ondragstart="event.dataTransfer.setData('text/plain','${i}')">
+      <button class="kc-del" title="Remove" onclick="event.stopPropagation(); deleteKanbanCard(${i})">✕</button>
+      <div class="kc-title">${escapeHtml(item.title)}</div>
+      <div class="kc-meta">${escapeHtml(item.client)} · ${escapeHtml(item.type)}</div>
+      ${item.value ? `<div class="kc-value">${formatCurrency(item.value)}</div>` : ''}
+    </div>
+  `;
+}
+function onKanbanDrop(e, stage){
+  e.currentTarget.classList.remove('drag-over');
+  const i = Number(e.dataTransfer.getData('text/plain'));
+  if(isNaN(i) || !state.pipeline.planner[i]) return;
+  state.pipeline.planner[i].stage = stage;
+  scheduleSave();
+  document.getElementById('pipeline-body').innerHTML = renderKanban();
+}
+function addKanbanCard(){
+  const title = document.getElementById('kb-title').value.trim();
+  if(!title){ alert('Give the card a title first.'); return; }
+  state.pipeline.planner.push({
+    title,
+    client: document.getElementById('kb-client').value.trim(),
+    type: document.getElementById('kb-type').value.trim(),
+    value: Number(document.getElementById('kb-value').value) || 0,
+    stage: 'Enquiry'
+  });
+  scheduleSave();
+  document.getElementById('pipeline-body').innerHTML = renderKanban();
+}
+function deleteKanbanCard(i){
+  if(!confirm('Remove this card from the pipeline planner?')) return;
+  state.pipeline.planner.splice(i,1);
+  scheduleSave();
+  document.getElementById('pipeline-body').innerHTML = renderKanban();
+}
+
+/* ---------------------------------------------------------------
+   10. ESTIMATING & QUOTING
+--------------------------------------------------------------- */
+function renderEstimating(main){
+  main.innerHTML = `
+    <div class="section-head">
+      <div><h1>Estimating & Quoting</h1><p>Quick reference to your PriceBook and estimating workflow, plus a log of quotes sent.</p></div>
+    </div>
+
+    <div class="panel">
+      <h3>PriceBook</h3>
+      <p class="panel-desc">Your PriceBook.xlsx stays the source of truth for rates — this is just a pointer to it.</p>
+      <div class="field-row">
+        <div class="field" style="grid-column: 1 / -1;">
+          <label class="field-label">File location</label>
+          <div style="display:flex; gap:8px;">
+            <input type="text" id="pricebook-path" data-path="estimating.priceBook.filePath" value="${escapeHtml(state.estimating.priceBook.filePath)}">
+            <button class="btn btn-sm" onclick="copyPriceBookPath()">Copy</button>
+          </div>
+        </div>
+      </div>
+      <div class="field"><label class="field-label">Notes</label><textarea data-path="estimating.priceBook.notes" rows="2">${escapeHtml(state.estimating.priceBook.notes)}</textarea></div>
+    </div>
+
+    <div class="panel">
+      <h3>Workflow Checklists</h3>
+      <p class="panel-desc">Mirrors the job-intake → rapid-quote-dispatch → scope-of-works → estimating process. Tick off as you go on a given job, then untick for the next one.</p>
+      <div class="panel-grid">
+        ${state.estimating.workflowChecklists.map((wc,ci)=>`
+          <div class="stat-card">
+            <div class="stat-label">${escapeHtml(wc.name)}</div>
+            ${wc.items.map((it,ii)=>`
+              <div class="checklist-item">
+                <input type="checkbox" data-path="estimating.workflowChecklists.${ci}.items.${ii}.done" ${it.done?'checked':''}>
+                <span>${escapeHtml(it.label)}</span>
+              </div>
+            `).join('')}
+          </div>
+        `).join('')}
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>Quotes Log</h3>
+      <p class="panel-desc">Every quote sent, so nothing falls through the cracks.</p>
+      ${renderTable('estimating.quotesLog', [
+        { field:'job', label:'Job', type:'text' },
+        { field:'dateSent', label:'Date Sent', type:'date' },
+        { field:'value', label:'Value', type:'number' },
+        { field:'status', label:'Status', type:'select', options:['Sent','Accepted','Declined','Expired'], pill:true }
+      ], { addLabel:'+ Add quote' })}
+    </div>
+  `;
+}
+function copyPriceBookPath(){
+  const val = document.getElementById('pricebook-path').value;
+  navigator.clipboard?.writeText(val).then(()=>{
+    const btn = event.target; const old = btn.textContent; btn.textContent = 'Copied'; setTimeout(()=>btn.textContent=old, 1200);
+  }).catch(()=>{});
+}
+
+/* ---------------------------------------------------------------
+   11. SCHEDULING
+--------------------------------------------------------------- */
+function renderScheduling(main){
+  const jobs = state.scheduling.jobs;
+  if(state.scheduling.selectedJobIndex >= jobs.length) state.scheduling.selectedJobIndex = 0;
+  const idx = state.scheduling.selectedJobIndex;
+  const job = jobs[idx];
+  main.innerHTML = `
+    <div class="section-head">
+      <div><h1>Scheduling</h1><p>Programme / Gantt overview per job. Add tasks with a start date and duration in days to see the bar chart build itself.</p></div>
+    </div>
+    <div class="panel">
+      <div class="field-row" style="align-items:flex-end;">
+        <div class="field">
+          <label class="field-label">Job programme</label>
+          <select onchange="selectSchedulingJob(this.value)">
+            ${jobs.map((j,i)=>`<option value="${i}" ${i===idx?'selected':''}>${escapeHtml(j.name || 'Untitled job')}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field"><button class="btn btn-sm" onclick="addSchedulingJob()">+ New job programme</button></div>
+        ${jobs.length>1 ? `<div class="field"><button class="btn btn-sm" onclick="deleteSchedulingJob()">Delete this programme</button></div>` : ''}
+      </div>
+      ${job ? `
+        <div class="field" style="margin-top:4px;">
+          <label class="field-label">Programme name</label>
+          <input type="text" data-path="scheduling.jobs.${idx}.name" value="${escapeHtml(job.name)}">
+        </div>
+        <div class="gantt-wrap">${renderGanttChart(job)}</div>
+        <h3 style="margin-top:20px;">Tasks</h3>
+        ${renderTable(`scheduling.jobs.${idx}.tasks`, [
+          { field:'trade', label:'Trade / Task', type:'text' },
+          { field:'start', label:'Start Date', type:'date' },
+          { field:'duration', label:'Duration (days)', type:'number' }
+        ], { addLabel:'+ Add task' })}
+      ` : `<p class="muted">No job programmes yet — click "New job programme" to start one.</p>`}
+    </div>
+  `;
+}
+function selectSchedulingJob(val){
+  state.scheduling.selectedJobIndex = Number(val);
+  scheduleSave();
+  renderScheduling(document.getElementById('main'));
+}
+function addSchedulingJob(){
+  const name = prompt('Job name (e.g. "123 Smith St — Deck"):');
+  if(!name) return;
+  state.scheduling.jobs.push({ name, tasks: [] });
+  state.scheduling.selectedJobIndex = state.scheduling.jobs.length - 1;
+  scheduleSave();
+  renderScheduling(document.getElementById('main'));
+}
+function deleteSchedulingJob(){
+  if(!confirm('Delete this job programme?')) return;
+  state.scheduling.jobs.splice(state.scheduling.selectedJobIndex, 1);
+  state.scheduling.selectedJobIndex = 0;
+  scheduleSave();
+  renderScheduling(document.getElementById('main'));
+}
+function renderGanttChart(job){
+  const tasks = (job.tasks||[]).filter(t=>t.start && t.duration);
+  if(tasks.length === 0){
+    return `<p class="muted">Add tasks below with a start date and a duration to see the programme visualised here.</p>`;
+  }
+  const starts = tasks.map(t=>parseDateStr(t.start)).filter(Boolean);
+  const ends = tasks.map(t=>{ const s=parseDateStr(t.start); return s ? addDays(s, Number(t.duration)||1) : null; }).filter(Boolean);
+  if(!starts.length) return `<p class="muted">Add valid dates to see the programme.</p>`;
+  const minDate = new Date(Math.min(...starts));
+  const maxDate = new Date(Math.max(...ends));
+  const totalDays = Math.max(dateDiffDays(minDate, maxDate), 1);
+  let dayCols = '';
+  for(let i=0;i<=totalDays;i++){
+    const d = addDays(minDate,i);
+    const weekend = d.getDay()===0 || d.getDay()===6;
+    dayCols += `<div class="gantt-day-col ${weekend?'weekend':''}" style="grid-column:${i+1}"></div>`;
+  }
+  const rows = tasks.map(t=>{
+    const s = parseDateStr(t.start);
+    const offset = dateDiffDays(minDate, s);
+    const dur = Math.max(Number(t.duration)||1, 1);
+    return `
+      <div class="gantt-row">
+        <div class="gantt-row-label" title="${escapeHtml(t.trade)}">${escapeHtml(t.trade || 'Untitled task')}</div>
+        <div class="gantt-row-track" style="grid-template-columns: repeat(${totalDays+1}, minmax(22px,1fr));">
+          ${dayCols}
+          <div class="gantt-bar" style="grid-column: ${offset+1} / span ${dur};" title="${escapeHtml(t.trade)}: ${formatDateShort(s)} – ${formatDateShort(addDays(s,dur))}">${dur}d</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+  return `
+    <div class="gantt-chart">
+      <div class="gantt-scale">${formatDateShort(minDate)} → ${formatDateShort(maxDate)} · ${totalDays} day span</div>
+      <div class="gantt-rows">${rows}</div>
+    </div>
+  `;
+}
+
+/* ---------------------------------------------------------------
+   12. FINANCE
+--------------------------------------------------------------- */
+let financeTab = 'overheads';
+function renderFinance(main){
+  main.innerHTML = `
+    <div class="section-head">
+      <div><h1>Finance</h1><p>Overhead audit, cash flow snapshot, job margin & risk, and outstanding variations. All placeholder figures — swap in your real numbers (from Xero, etc.) whenever you're ready.</p></div>
+    </div>
+    <div class="subnav">
+      <button class="subnav-btn ${financeTab==='overheads'?'active':''}" onclick="setFinanceTab('overheads')">Overhead Audit</button>
+      <button class="subnav-btn ${financeTab==='cashflow'?'active':''}" onclick="setFinanceTab('cashflow')">Cash Flow</button>
+      <button class="subnav-btn ${financeTab==='margins'?'active':''}" onclick="setFinanceTab('margins')">Job Margin & Risk</button>
+      <button class="subnav-btn ${financeTab==='variations'?'active':''}" onclick="setFinanceTab('variations')">Variations</button>
+    </div>
+    <div id="finance-body"></div>
+  `;
+  renderFinanceBody();
+}
+function setFinanceTab(tab){ financeTab = tab; renderFinance(document.getElementById('main')); }
+function renderFinanceBody(){
+  const body = document.getElementById('finance-body');
+  if(financeTab === 'overheads'){
+    const ov = state.finance.overheads;
+    const total = ov.categories.reduce((s,c)=>s+(Number(c.monthly)||0),0) || 1;
+    body.innerHTML = `
+      <div class="panel">
+        <h3>Overhead Audit</h3>
+        <p class="panel-desc">Run-rate = current monthly overheads × 12. Overhead % of revenue uses the estimated monthly revenue below — not linked to Xero yet, edit both manually.</p>
+        <div class="field" style="max-width:260px;">
+          <label class="field-label">Estimated average monthly revenue</label>
+          <input type="number" data-path="finance.overheads.monthlyRevenueEstimate" value="${ov.monthlyRevenueEstimate}">
+        </div>
+        <div class="stat-row">
+          <div class="stat-card"><div class="stat-label">Monthly overhead total</div><div class="stat-value" id="ov-monthly-total">${formatCurrency(total)}</div></div>
+          <div class="stat-card"><div class="stat-label">Annual run-rate</div><div class="stat-value" id="ov-annual-total">${formatCurrency(total*12)}</div></div>
+          <div class="stat-card"><div class="stat-label">Overhead as % of revenue</div><div class="stat-value" id="ov-pct">${ov.monthlyRevenueEstimate>0 ? ((total/ov.monthlyRevenueEstimate)*100).toFixed(1)+'%' : '—'}</div></div>
+        </div>
+        <h3 style="margin-top:6px;">Category breakdown</h3>
+        <div class="bar-list" style="margin-bottom:16px;">
+          ${ov.categories.map((c,i)=>{
+            const share = (Number(c.monthly)||0)/total*100;
+            return `
+              <div class="bar-item">
+                <div class="bar-item-top"><span>${escapeHtml(c.name||'Untitled')}</span><span id="ov-bar-pct-${i}">${share.toFixed(0)}%</span></div>
+                <div class="bar-track"><div class="bar-fill" id="ov-bar-fill-${i}" style="width:${share.toFixed(1)}%"></div></div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+        ${renderTable('finance.overheads.categories', [
+          { field:'name', label:'Category', type:'text' },
+          { field:'monthly', label:'Monthly $', type:'number' }
+        ], { addLabel:'+ Add overhead category' })}
+      </div>
+    `;
+  } else if(financeTab === 'cashflow'){
+    const cf = state.finance.cashFlow;
+    body.innerHTML = `
+      <div class="panel">
+        <h3>Cash Flow Snapshot</h3>
+        <p class="panel-desc">A quick point-in-time picture. Replace with real bank/debtor figures whenever you check in.</p>
+        <div class="field-row">
+          <div class="field"><label class="field-label">Current bank balance</label><input type="number" data-path="finance.cashFlow.currentBankBalance" value="${cf.currentBankBalance}"></div>
+          <div class="field"><label class="field-label">Outstanding invoices (debtors)</label><input type="number" data-path="finance.cashFlow.outstandingInvoices" value="${cf.outstandingInvoices}"></div>
+          <div class="field"><label class="field-label">Upcoming bills (creditors)</label><input type="number" data-path="finance.cashFlow.upcomingBills" value="${cf.upcomingBills}"></div>
+        </div>
+        <div class="stat-row">
+          <div class="stat-card"><div class="stat-label">Net position</div><div class="stat-value" id="cf-net">${formatCurrency(cf.currentBankBalance + cf.outstandingInvoices - cf.upcomingBills)}</div></div>
+        </div>
+        <h3>Monthly in / out</h3>
+        ${renderTable('finance.cashFlow.months', [
+          { field:'month', label:'Month', type:'text' },
+          { field:'in', label:'Cash In', type:'number' },
+          { field:'out', label:'Cash Out', type:'number' },
+          { field:'net', label:'Net', type:'computed', key:'net', compute: r => formatCurrency((Number(r.in)||0)-(Number(r.out)||0)) }
+        ], { addLabel:'+ Add month' })}
+      </div>
+    `;
+  } else if(financeTab === 'margins'){
+    body.innerHTML = `
+      <div class="panel">
+        <h3>Job Margin & Risk</h3>
+        <p class="panel-desc">Margin $ and Margin % are computed automatically from contract value and projected costs.</p>
+        ${renderTable('finance.jobMargins', [
+          { field:'job', label:'Job', type:'text' },
+          { field:'contractValue', label:'Contract Value', type:'number' },
+          { field:'costsToDate', label:'Costs to Date', type:'number' },
+          { field:'projectedCosts', label:'Projected Total Costs', type:'number' },
+          { field:'risk', label:'Risk', type:'select', options:['Low','Medium','High'], pill:true },
+          { field:'marginDollar', label:'Margin $', type:'computed', key:'marginDollar', compute: r => formatCurrency((Number(r.contractValue)||0)-(Number(r.projectedCosts)||0)) },
+          { field:'marginPct', label:'Margin %', type:'computed', key:'marginPct', compute: r => { const cv=Number(r.contractValue)||0; if(!cv) return '—'; return (((cv-(Number(r.projectedCosts)||0))/cv)*100).toFixed(1)+'%'; } }
+        ], { addLabel:'+ Add job' })}
+      </div>
+    `;
+  } else {
+    body.innerHTML = `
+      <div class="panel">
+        <h3>Outstanding Variations</h3>
+        <p class="panel-desc">Track variations from raised through to invoiced/paid so nothing gets forgotten at final claim.</p>
+        ${renderTable('finance.variations', [
+          { field:'job', label:'Job', type:'text' },
+          { field:'description', label:'Description', type:'textarea' },
+          { field:'value', label:'Value', type:'number' },
+          { field:'status', label:'Status', type:'select', options:['Pending','Approved','Invoiced','Paid','Rejected'], pill:true },
+          { field:'dateRaised', label:'Date Raised', type:'date' }
+        ], { addLabel:'+ Add variation' })}
+      </div>
+    `;
+  }
+}
+
+/* ---------------------------------------------------------------
+   13. MARKETING & GROWTH
+--------------------------------------------------------------- */
+function renderMarketing(main){
+  const w = state.marketing.website;
+  main.innerHTML = `
+    <div class="section-head">
+      <div><h1>Marketing & Growth</h1><p>Website/SEO notes, ad performance, and referral tracking — your reputation on the Tweed Coast is the real engine, this just keeps it visible.</p></div>
+    </div>
+
+    <div class="panel">
+      <h3>Website & SEO</h3>
+      <div class="field-row">
+        <div class="field"><label class="field-label">Domain</label><input type="text" data-path="marketing.website.domain" value="${escapeHtml(w.domain)}"></div>
+        <div class="field"><label class="field-label">Monthly visitors</label><input type="text" data-path="marketing.website.monthlyVisitors" value="${escapeHtml(w.monthlyVisitors)}"></div>
+      </div>
+      <div class="field"><label class="field-label">Target keywords</label><textarea data-path="marketing.website.topKeywords" rows="2">${escapeHtml(w.topKeywords)}</textarea></div>
+      <div class="field"><label class="field-label">Notes</label><textarea data-path="marketing.website.notes" rows="2">${escapeHtml(w.notes)}</textarea></div>
+    </div>
+
+    <div class="panel">
+      <h3>Ad Performance</h3>
+      <p class="panel-desc">Cost per lead is calculated automatically from spend ÷ leads.</p>
+      ${renderTable('marketing.adCampaigns', [
+        { field:'platform', label:'Platform', type:'text' },
+        { field:'spend', label:'Spend', type:'number' },
+        { field:'leads', label:'Leads Generated', type:'number' },
+        { field:'costPerLead', label:'Cost / Lead', type:'computed', key:'costPerLead', compute: r => { const l=Number(r.leads)||0; if(!l) return '—'; return formatCurrency((Number(r.spend)||0)/l); } },
+        { field:'notes', label:'Notes', type:'textarea' }
+      ], { addLabel:'+ Add campaign' })}
+    </div>
+
+    <div class="panel">
+      <h3>Referral Tracking</h3>
+      <p class="panel-desc">Word of mouth is usually the best lead source for a business like this — worth tracking properly.</p>
+      ${renderTable('marketing.referrals', [
+        { field:'source', label:'Referral Source', type:'text' },
+        { field:'jobsReferred', label:'Jobs Referred', type:'number' },
+        { field:'valueGenerated', label:'Value Generated', type:'number' },
+        { field:'notes', label:'Notes', type:'textarea' }
+      ], { addLabel:'+ Add referral source' })}
+    </div>
+  `;
+}
+
+/* ---------------------------------------------------------------
+   14. DIRECTOR / TOOLS
+--------------------------------------------------------------- */
+function renderDirector(main){
+  main.innerHTML = `
+    <div class="section-head">
+      <div><h1>Director / Tools</h1><p>Your tech stack map and an issues / lessons learned log.</p></div>
+    </div>
+
+    <div class="panel">
+      <h3>Tech Stack Map</h3>
+      <p class="panel-desc">What software runs the business, and what it costs.</p>
+      ${renderTable('director.techStack', [
+        { field:'category', label:'Category', type:'text' },
+        { field:'tool', label:'Tool', type:'text' },
+        { field:'monthlyCost', label:'Monthly Cost', type:'number' },
+        { field:'notes', label:'Notes', type:'textarea' }
+      ], { addLabel:'+ Add tool' })}
+    </div>
+
+    <div class="panel">
+      <h3>Issues / Lessons Learned Log</h3>
+      <p class="panel-desc">Quick record of what went wrong and what to change next time — the most valuable column is "Lesson".</p>
+      ${renderTable('director.issuesLog', [
+        { field:'date', label:'Date', type:'date' },
+        { field:'job', label:'Job', type:'text' },
+        { field:'issue', label:'Issue', type:'textarea' },
+        { field:'resolution', label:'Resolution', type:'textarea' },
+        { field:'lesson', label:'Lesson Learned', type:'textarea' }
+      ], { addLabel:'+ Add entry' })}
+    </div>
+  `;
+}
+
+/* ---------------------------------------------------------------
+   15. INIT
+--------------------------------------------------------------- */
+buildSideNav();
+renderRoute();
+</script>
+</body>
+</html>
