@@ -361,6 +361,34 @@
   .vt-sheet input:focus, .vt-sheet textarea:focus, .vt-sheet select:focus{ border-color:#87a86b; }
   .vt-sheet .date-field-display{ background:#f7f8f3 !important; border-color:#d8dbcf !important; color:#1a1c16 !important; }
 
+  /* ---------- Handover & Defects ---------- */
+  .hd-card{ background: var(--bg-input); border:1px solid var(--border-soft); border-radius: var(--radius-sm); padding:16px; margin-bottom:14px; }
+  .hd-card-head{ display:flex; gap:10px; align-items:center; margin-bottom:12px; }
+  .hd-card-head .hd-item-name{ flex:1; font-weight:700; }
+  .hd-card-head select{ width:auto; min-width:170px; }
+  .hd-card-grid{ display:grid; grid-template-columns: repeat(auto-fit, minmax(180px,1fr)); gap:12px; margin-bottom:12px; }
+  .hd-files{ margin-top:6px; }
+  .hd-file-list{ display:flex; flex-wrap:wrap; gap:6px; margin:8px 0; }
+  .hd-file-chip{ display:inline-flex; align-items:center; gap:4px; background: var(--bg-card); border:1px solid var(--border); border-radius:999px; padding:3px 4px 3px 10px; font-size:12px; }
+  .hd-file-chip button{ background:transparent; border:none; color: var(--text-dim); cursor:pointer; font-size:12px; padding:2px 4px; }
+  .hd-file-chip button:first-child{ color: var(--accent); font-weight:600; }
+  .hd-file-chip .hd-file-remove{ color: var(--text-faint); }
+  .hd-file-chip .hd-file-remove:hover{ color: var(--danger); }
+  .hd-missing-badge{ color: var(--danger); font-weight:700; text-transform:none; letter-spacing:0; margin-left:6px; }
+  .hd-ok-badge{ color: var(--success); font-weight:700; text-transform:none; letter-spacing:0; margin-left:6px; }
+  .hd-connect-banner{ display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+
+  /* Printed handover pack / defects list documents */
+  .hd-print-section{ margin-bottom:22px; }
+  .hd-print-section h3{ font-size:14px; border-bottom:1px solid #d8dbcf; padding-bottom:6px; margin-bottom:10px; }
+  .hd-print-cat{ margin-bottom:12px; }
+  .hd-print-cat-title{ font-weight:700; font-size:12.5px; margin-bottom:4px; }
+  .hd-print-cat ul{ margin:0; padding-left:20px; font-size:12.5px; line-height:1.6; }
+  .hd-missing-inline{ color:#b3452f; font-weight:600; }
+  table.hd-print-table{ width:100%; border-collapse:collapse; font-size:11.5px; }
+  table.hd-print-table th{ text-align:left; border-bottom:1.5px solid #1a1c16; padding:5px 8px; font-size:10.5px; text-transform:uppercase; letter-spacing:0.03em; }
+  table.hd-print-table td{ padding:6px 8px; border-bottom:1px solid #d8dbcf; }
+
   @media print{
     html, body{ background:#fff !important; }
     #sidebar, #topbar, footer.app-footer{ display:none !important; }
@@ -380,6 +408,19 @@
     .vt-terms{ padding-top:8px; margin-bottom:14px; }
     .vt-sign-block .vt-sign-line{ margin-top:20px; margin-bottom:4px; }
     .vt-sheet input, .vt-sheet textarea, .vt-sheet select{ padding:4px 7px; }
+
+    /* Handover pack / defects list — same visibility trick as Variation Notice,
+       scoped by a body class so the two hidden print-roots on this page never
+       both try to render at once. */
+    body.printing-handover-pack #main *{ visibility:hidden; }
+    body.printing-handover-pack #handover-pack-print-root,
+    body.printing-handover-pack #handover-pack-print-root *{ visibility:visible; }
+    body.printing-handover-pack #handover-pack-print-root{ display:block !important; position:absolute; top:0; left:0; width:100%; margin:0; padding:0; box-shadow:none; border-radius:0; max-width:none; }
+
+    body.printing-defects-list #main *{ visibility:hidden; }
+    body.printing-defects-list #defects-list-print-root,
+    body.printing-defects-list #defects-list-print-root *{ visibility:visible; }
+    body.printing-defects-list #defects-list-print-root{ display:block !important; position:absolute; top:0; left:0; width:100%; margin:0; padding:0; box-shadow:none; border-radius:0; max-width:none; }
   }
 
   @media (max-width: 860px){
@@ -547,6 +588,15 @@ const DEFAULT_DATA = {
   siteTime: {
     selectedJobId: null,
     logs: {}
+  },
+
+  handoverDefects: {
+    selectedJobId: null,
+    logs: {}
+    /* logs[jobId] = { warrantyItems: [...], defects: [...] } — created on first
+       use of a job. Uploaded files are NOT stored here (or anywhere in
+       localStorage) — only their name/metadata is. The actual bytes live on
+       disk in the job files folder you connect (see FILES section below). */
   },
 
   finance: {
@@ -765,7 +815,7 @@ function statusClass(value){
   const v = String(value||'').toLowerCase();
   if(/high|declined|rejected|on hold|expired/.test(v)) return 'pill-danger';
   if(/medium|pending|sent|scheduled/.test(v)) return 'pill-warning';
-  if(/low|accepted|approved|complete|paid|in progress|active/.test(v)) return 'pill-success';
+  if(/low|accepted|approved|complete|paid|in progress|active|closed|rectified/.test(v)) return 'pill-success';
   return 'pill-neutral';
 }
 function parseDateStr(s){ if(!s) return null; const d = new Date(s+'T00:00:00'); return isNaN(d.getTime()) ? null : d; }
@@ -970,6 +1020,8 @@ function getTemplate(path){
   if(/^siteTime\.logs\.[^.]+\.employees$/.test(path)) return { name:'', weekEnding:'', hours:0, rate:0, notes:'' };
   if(/^siteTime\.logs\.[^.]+\.trades$/.test(path)) return { trade:'', weekEnding:'', hours:0, notes:'' };
   if(/^siteDiary\.logs\.[^.]+\.(dailyEntries|lessonsEntries)$/.test(path)) return { date: todayStr(), text:'' };
+  if(/^handoverDefects\.logs\.[^.]+\.warrantyItems$/.test(path)) return { itemName:'', category:'Product Warranty', supplier:'', tradeCategory:'', certDate:'', warrantyExpiry:'', notes:'', files:[] };
+  if(/^handoverDefects\.logs\.[^.]+\.defects$/.test(path)) return { description:'', location:'', dateIdentified:'', identifiedBy:'Client', status:'Open', tradeCategory:'', stage:'Practical Completion', dateClosed:'', notes:'', photos:[] };
   return {};
 }
 function addRow(path, opts={}){
@@ -1159,6 +1211,7 @@ const ROUTES = [
   { key:'systems', label:'Systems', icon:'🗂️', render: renderSystems },
   { key:'scheduling', label:'Scheduling', icon:'📅', render: renderScheduling },
   { key:'sitetime', label:'Site Time', icon:'⏱️', render: renderSiteTime },
+  { key:'handover', label:'Handover & Defects', icon:'🔑', render: renderHandoverDefects },
   { key:'finance', label:'Finance', icon:'💰', render: renderFinance },
   { key:'marketing', label:'Marketing & Growth', icon:'📈', render: renderMarketing },
   { key:'contacts', label:'Contacts', icon:'📇', render: renderContacts },
@@ -1200,6 +1253,8 @@ function renderHome(main){
     return s + empH + tradeH;
   },0);
   const totalDiaryEntries = Object.values(state.siteDiary.logs).reduce((s,log)=>s+log.dailyEntries.length+log.lessonsEntries.length,0);
+  const handoverWarrantyCount = Object.values(state.handoverDefects.logs).reduce((s,log)=>s+log.warrantyItems.length,0);
+  const handoverOpenDefects = Object.values(state.handoverDefects.logs).reduce((s,log)=>s+log.defects.filter(d=>d.status!=='Closed').length,0);
   const cards = [
     { key:'business', icon:'🏗️', title:'The Business', desc:'Vision & goals, build process, systems guide, compliance & licensing.', stat: 'Lic. 480112C · $20M PL' },
     { key:'pipeline', icon:'📋', title:'Job Pipeline', desc:'Active jobs, pipeline planner, leads & enquiries tracker.', stat: `${jobCount} active job${jobCount===1?'':'s'} · ${leadCount} lead${leadCount===1?'':'s'}` },
@@ -1207,6 +1262,7 @@ function renderHome(main){
     { key:'systems', icon:'🗂️', title:'Systems', desc:'Fillable document templates — fill in, then print or save as PDF.', stat: 'Variation Notice template' },
     { key:'scheduling', icon:'📅', title:'Scheduling', desc:'Programme / Gantt overview per job.', stat: `${state.scheduling.jobs.length} job programme(s)` },
     { key:'sitetime', icon:'⏱️', title:'Site Time', desc:'Employee wages and trade hours by week, per active job.', stat: `${totalHoursLogged} hour${totalHoursLogged===1?'':'s'} logged` },
+    { key:'handover', icon:'🔑', title:'Handover & Defects', desc:'Warranty & certificate register plus defects tracking, per job.', stat: `${handoverWarrantyCount} warranty item(s) · ${handoverOpenDefects} open defect(s)` },
     { key:'finance', icon:'💰', title:'Finance', desc:'Overhead audit, cash flow snapshot, job margin & risk, variations.', stat: `${formatCurrency(ovTotal)}/mo overhead · ${varCount} variation(s) pending` },
     { key:'marketing', icon:'📈', title:'Marketing & Growth', desc:'Website/SEO, ad performance, referral tracking.', stat: `${state.marketing.referrals.length} referral source(s)` },
     { key:'contacts', icon:'📇', title:'Contacts', desc:'Trade contacts by category, plus a supplier directory.', stat: `${tradeContactCount} trade contact(s) · ${state.contacts.suppliers.length} supplier(s)` },
@@ -1908,7 +1964,514 @@ function selectSiteTimeJob(jobId){
 }
 
 /* ---------------------------------------------------------------
-   15. FINANCE
+   15. HANDOVER & DEFECTS
+   Job-scoped to Active Jobs only (handover is a late-stage process,
+   so Pipeline Leads aren't offered here, unlike Site Diary/To-Do).
+   Uploaded files are NEVER stored in state/localStorage — only their
+   name and metadata are. The real bytes live on disk, in a folder you
+   connect once via the File System Access API (Chrome/Edge only).
+--------------------------------------------------------------- */
+const WARRANTY_CATEGORIES = ['Product Warranty','Compliance Certificate','As-Built Document','Manual/Instructions','Insurance/Other'];
+const DEFECT_STAGES = ['Practical Completion','Defects Liability Period'];
+const DEFECT_STATUSES = ['Open','Rectification Scheduled','Rectified','Closed'];
+const DEFECT_IDENTIFIED_BY = ['Client','Builder','Certifier'];
+
+/* --- tiny IndexedDB wrapper, used only to remember the folder handle across sessions --- */
+const HD_IDB_NAME = 'batesDashboardFiles';
+const HD_IDB_STORE = 'handles';
+function hdIdbOpen(){
+  return new Promise((resolve,reject)=>{
+    const req = indexedDB.open(HD_IDB_NAME, 1);
+    req.onupgradeneeded = () => { req.result.createObjectStore(HD_IDB_STORE); };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function hdIdbSet(key, value){
+  const db = await hdIdbOpen();
+  return new Promise((resolve,reject)=>{
+    const tx = db.transaction(HD_IDB_STORE,'readwrite');
+    tx.objectStore(HD_IDB_STORE).put(value, key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+async function hdIdbGet(key){
+  const db = await hdIdbOpen();
+  return new Promise((resolve,reject)=>{
+    const tx = db.transaction(HD_IDB_STORE,'readonly');
+    const req = tx.objectStore(HD_IDB_STORE).get(key);
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+/* --- job files folder connection --- */
+let jobFilesRootHandle = null;
+let jobFilesPendingHandle = null; // remembered handle that needs a click to re-grant permission
+let jobFilesStatus = 'checking'; // 'checking' | 'disconnected' | 'needs-permission' | 'connected' | 'unsupported'
+
+async function initJobFilesFolder(){
+  if(!('showDirectoryPicker' in window)){ jobFilesStatus = 'unsupported'; return; }
+  try{
+    const handle = await hdIdbGet('rootDir');
+    if(!handle){ jobFilesStatus = 'disconnected'; }
+    else{
+      const perm = await handle.queryPermission({ mode:'readwrite' });
+      if(perm === 'granted'){ jobFilesRootHandle = handle; jobFilesStatus = 'connected'; }
+      else{ jobFilesPendingHandle = handle; jobFilesStatus = 'needs-permission'; }
+    }
+  }catch(e){
+    jobFilesStatus = 'disconnected';
+  }
+  if(location.hash.replace('#','') === 'handover') renderHandoverDefects(document.getElementById('main'));
+}
+async function connectJobFilesFolder(){
+  try{
+    const handle = await window.showDirectoryPicker({ id:'bates-job-files', mode:'readwrite' });
+    // The folder is usable for this session regardless of whether we can
+    // remember it for next time — don't let a failed IndexedDB write (rare,
+    // but possible e.g. in private browsing) block using it right now.
+    jobFilesRootHandle = handle;
+    jobFilesPendingHandle = null;
+    jobFilesStatus = 'connected';
+    renderHandoverDefects(document.getElementById('main'));
+    try{ await hdIdbSet('rootDir', handle); }
+    catch(idbErr){ console.error('Could not remember this folder for next session:', idbErr); }
+  }catch(e){
+    if(e.name !== 'AbortError') alert('Could not connect that folder: ' + e.message);
+  }
+}
+async function reconnectJobFilesFolder(){
+  if(!jobFilesPendingHandle) return connectJobFilesFolder();
+  try{
+    const perm = await jobFilesPendingHandle.requestPermission({ mode:'readwrite' });
+    if(perm === 'granted'){
+      jobFilesRootHandle = jobFilesPendingHandle;
+      jobFilesPendingHandle = null;
+      jobFilesStatus = 'connected';
+      renderHandoverDefects(document.getElementById('main'));
+    }
+  }catch(e){ /* user dismissed the permission prompt */ }
+}
+function sanitizeFilename(name){
+  return String(name).replace(/[\/\\:*?"<>|]/g, '-').trim().slice(0,150) || 'file';
+}
+async function getJobDirHandle(jobId, category){
+  const job = state.pipeline.activeJobs.find(j=>j.id===jobId);
+  const jobFolderName = sanitizeFilename(`${job?.client || 'Job'} - ${jobId}`);
+  const jobDir = await jobFilesRootHandle.getDirectoryHandle(jobFolderName, { create:true });
+  return category ? jobDir.getDirectoryHandle(category, { create:true }) : jobDir;
+}
+async function saveFilesToJob(jobId, category, itemLabel, fileList){
+  const dir = await getJobDirHandle(jobId, category);
+  const saved = [];
+  for(const file of fileList){
+    const storedName = sanitizeFilename(`${itemLabel}__${Date.now()}_${Math.random().toString(36).slice(2,6)}__${file.name}`);
+    const fileHandle = await dir.getFileHandle(storedName, { create:true });
+    const writable = await fileHandle.createWritable();
+    await writable.write(file);
+    await writable.close();
+    saved.push({ name: file.name, storedName, addedDate: todayStr() });
+  }
+  return saved;
+}
+async function openStoredFile(jobId, category, storedName){
+  if(!jobFilesRootHandle){ alert('Reconnect your job files folder first (button at the top of Handover & Defects).'); return; }
+  try{
+    const dir = await getJobDirHandle(jobId, category);
+    const fileHandle = await dir.getFileHandle(storedName);
+    const file = await fileHandle.getFile();
+    const url = URL.createObjectURL(file);
+    window.open(url, '_blank');
+  }catch(e){
+    alert('Could not open that file — it may have been moved, renamed, or deleted outside the dashboard.');
+  }
+}
+async function deleteStoredFile(jobId, category, storedName){
+  if(!jobFilesRootHandle) return;
+  try{
+    const dir = await getJobDirHandle(jobId, category);
+    await dir.removeEntry(storedName);
+  }catch(e){ /* already gone on disk — fine, metadata still gets removed by the caller */ }
+}
+
+/* --- data --- */
+function ensureHandoverLog(jobId){
+  if(!state.handoverDefects.logs[jobId]) state.handoverDefects.logs[jobId] = { warrantyItems: [], defects: [] };
+}
+
+/* --- routing / render --- */
+let handoverTab = 'warranty';
+let warrantySort = 'category'; // 'category' | 'expiry'
+function renderHandoverDefects(main){
+  const jobs = state.pipeline.activeJobs;
+  if(!state.handoverDefects.selectedJobId || !jobs.some(j=>j.id===state.handoverDefects.selectedJobId)){
+    state.handoverDefects.selectedJobId = jobs.length ? jobs[0].id : null;
+  }
+  const jobId = state.handoverDefects.selectedJobId;
+  if(jobId) ensureHandoverLog(jobId);
+
+  main.innerHTML = `
+    <div class="section-head">
+      <div><h1>Handover & Defects</h1><p>Warranty & certificate register and defects tracking, per job — the job list matches Job Pipeline → Active Jobs.</p></div>
+    </div>
+    ${renderJobFilesConnectionPanel()}
+    <div class="panel">
+      ${jobs.length === 0 ? `<p class="muted">No active jobs yet — add one in Job Pipeline → Active Jobs first, then it'll show up here.</p>` : `
+        <div class="field" style="max-width:420px;">
+          <label class="field-label">Job</label>
+          <select onchange="selectHandoverJob(this.value)">
+            ${jobs.map(j=>`<option value="${j.id}" ${j.id===jobId?'selected':''}>${escapeHtml(j.client||'Untitled')} — ${escapeHtml(j.address||'')}</option>`).join('')}
+          </select>
+        </div>
+      `}
+    </div>
+    <div id="handover-pack-print-root" style="display:none;"></div>
+    <div id="defects-list-print-root" style="display:none;"></div>
+    ${jobId ? `
+      <div class="subnav">
+        <button class="subnav-btn ${handoverTab==='warranty'?'active':''}" onclick="setHandoverTab('warranty')">Warranty & Certificate Register</button>
+        <button class="subnav-btn ${handoverTab==='defects'?'active':''}" onclick="setHandoverTab('defects')">Defects Tracking</button>
+      </div>
+      <div id="handover-body"></div>
+    ` : ''}
+  `;
+  if(jobId) renderHandoverBody();
+}
+function renderJobFilesConnectionPanel(){
+  if(jobFilesStatus === 'unsupported'){
+    return `<div class="panel no-print"><p class="muted">Your browser doesn't support connecting a local folder for file storage (this needs Chrome or Edge). You can still use the register and defects list without attaching files.</p></div>`;
+  }
+  if(jobFilesStatus === 'checking'){
+    return `<div class="panel no-print"><p class="muted">Checking for a connected job files folder…</p></div>`;
+  }
+  if(jobFilesStatus === 'connected'){
+    return `<div class="panel no-print hd-connect-banner">
+      <div><span style="color:var(--success); font-weight:700;">● Connected</span> <span class="faint">— warranty documents and defect photos save straight to your job files folder.</span></div>
+      <button type="button" class="btn btn-sm" onclick="connectJobFilesFolder()">Change folder</button>
+    </div>`;
+  }
+  if(jobFilesStatus === 'needs-permission'){
+    return `<div class="panel no-print hd-connect-banner">
+      <div><span style="color:var(--warning); font-weight:700;">● Reconnect needed</span> <span class="faint">— your browser needs you to re-confirm access to your job files folder this session.</span></div>
+      <button type="button" class="btn btn-primary btn-sm" onclick="reconnectJobFilesFolder()">Reconnect folder</button>
+    </div>`;
+  }
+  return `<div class="panel no-print">
+    <h3>Connect your job files folder</h3>
+    <p class="panel-desc">Pick a folder on your computer (e.g. "Bates Projects Job Files") once — warranty documents and defect photos will be saved there in a subfolder per job, as real files on your disk, not stuck inside the browser.</p>
+    <button type="button" class="btn btn-primary" onclick="connectJobFilesFolder()">Connect folder</button>
+  </div>`;
+}
+function setHandoverTab(tab){ handoverTab = tab; renderHandoverBody(); }
+function selectHandoverJob(jobId){
+  state.handoverDefects.selectedJobId = jobId;
+  ensureHandoverLog(jobId);
+  scheduleSave();
+  renderHandoverDefects(document.getElementById('main'));
+}
+function renderHandoverBody(){
+  const body = document.getElementById('handover-body');
+  if(!body) return;
+  body.innerHTML = handoverTab === 'warranty' ? renderWarrantyRegister() : renderDefectsTracking();
+}
+
+/* --- Warranty & Certificate Register --- */
+function renderWarrantyRegister(){
+  const jobId = state.handoverDefects.selectedJobId;
+  const items = state.handoverDefects.logs[jobId].warrantyItems;
+  const complete = items.filter(i=>i.files.length>0).length;
+  const tradeOptions = state.contacts.trades.map(t=>t.category).filter(Boolean);
+  return `
+    <div class="panel">
+      <div class="stat-row">
+        <div class="stat-card"><div class="stat-label">Handover ready</div><div class="stat-value">${complete} of ${items.length} complete</div></div>
+      </div>
+      <div class="no-print" style="display:flex; gap:8px; align-items:center; margin-bottom:14px; flex-wrap:wrap;">
+        <span class="faint">Sort by:</span>
+        <button type="button" class="subnav-btn ${warrantySort==='category'?'active':''}" onclick="setWarrantySort('category')">Category</button>
+        <button type="button" class="subnav-btn ${warrantySort==='expiry'?'active':''}" onclick="setWarrantySort('expiry')">Expiry date</button>
+        <span style="flex:1;"></span>
+        <button type="button" class="btn btn-primary btn-sm" onclick="exportHandoverPack()">🖨️ Export Handover Pack (PDF)</button>
+      </div>
+      ${items.map((item,idx)=>renderWarrantyRow(jobId, item, idx, tradeOptions)).join('') || '<p class="muted">No warranty or certificate items logged yet.</p>'}
+      <button type="button" class="btn btn-ghost btn-sm" onclick="addRow('handoverDefects.logs.${jobId}.warrantyItems')">+ Add item</button>
+    </div>
+  `;
+}
+function renderWarrantyRow(jobId, item, idx, tradeOptions){
+  const missing = item.files.length === 0;
+  return `
+    <div class="hd-card">
+      <div class="hd-card-head">
+        <input type="text" class="hd-item-name" placeholder="Item / product name" data-path="handoverDefects.logs.${jobId}.warrantyItems.${idx}.itemName" value="${escapeHtml(item.itemName)}">
+        <select data-path="handoverDefects.logs.${jobId}.warrantyItems.${idx}.category">
+          ${WARRANTY_CATEGORIES.map(c=>`<option ${c===item.category?'selected':''}>${c}</option>`).join('')}
+        </select>
+        <button type="button" class="icon-btn danger" title="Delete item" onclick="deleteRow('handoverDefects.logs.${jobId}.warrantyItems',${idx})">✕</button>
+      </div>
+      <div class="hd-card-grid">
+        <div class="field"><label class="field-label">Supplier / Installer</label><input type="text" data-path="handoverDefects.logs.${jobId}.warrantyItems.${idx}.supplier" value="${escapeHtml(item.supplier)}"></div>
+        <div class="field"><label class="field-label">Trade Responsible</label>
+          <select data-path="handoverDefects.logs.${jobId}.warrantyItems.${idx}.tradeCategory">
+            <option value="">—</option>
+            ${tradeOptions.map(t=>`<option ${t===item.tradeCategory?'selected':''}>${escapeHtml(t)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field"><label class="field-label">Certificate / Install Date</label>${renderDatePickerField({ path:`handoverDefects.logs.${jobId}.warrantyItems.${idx}.certDate`, value: item.certDate })}</div>
+        <div class="field"><label class="field-label">Warranty Expiry</label>${renderDatePickerField({ path:`handoverDefects.logs.${jobId}.warrantyItems.${idx}.warrantyExpiry`, value: item.warrantyExpiry })}</div>
+      </div>
+      <div class="field"><label class="field-label">Notes</label><textarea data-path="handoverDefects.logs.${jobId}.warrantyItems.${idx}.notes" rows="2">${escapeHtml(item.notes)}</textarea></div>
+      <div class="hd-files">
+        <label class="field-label">Files ${missing ? `<span class="hd-missing-badge">Missing</span>` : `<span class="hd-ok-badge">${item.files.length} attached</span>`}</label>
+        <div class="hd-file-list">
+          ${item.files.map((f,fi)=>`
+            <span class="hd-file-chip">
+              <button type="button" onclick="openStoredFile('${jobId}','warranties','${f.storedName}')">📄 ${escapeHtml(f.name)}</button>
+              <button type="button" class="hd-file-remove" title="Remove file" onclick="removeWarrantyFile('${jobId}',${idx},${fi})">✕</button>
+            </span>
+          `).join('')}
+        </div>
+        <input type="file" multiple accept=".pdf,.doc,.docx,image/*" id="hd-wupload-${jobId}-${idx}" style="display:none" onchange="handleWarrantyUpload(event,'${jobId}',${idx})">
+        <button type="button" class="btn btn-ghost btn-sm no-print" onclick="document.getElementById('hd-wupload-${jobId}-${idx}').click()">+ Attach file(s)</button>
+      </div>
+    </div>
+  `;
+}
+function setWarrantySort(mode){
+  warrantySort = mode;
+  const jobId = state.handoverDefects.selectedJobId;
+  const items = state.handoverDefects.logs[jobId].warrantyItems;
+  items.sort((a,b)=>{
+    if(mode==='expiry'){
+      if(!a.warrantyExpiry && !b.warrantyExpiry) return 0;
+      if(!a.warrantyExpiry) return 1;
+      if(!b.warrantyExpiry) return -1;
+      return a.warrantyExpiry.localeCompare(b.warrantyExpiry);
+    }
+    return (a.category||'').localeCompare(b.category||'') || (a.itemName||'').localeCompare(b.itemName||'');
+  });
+  scheduleSave();
+  renderHandoverBody();
+}
+async function handleWarrantyUpload(e, jobId, idx){
+  const files = Array.from(e.target.files || []);
+  e.target.value = '';
+  if(!files.length) return;
+  if(!jobFilesRootHandle){ alert('Connect your job files folder first (button at the top of this page).'); return; }
+  const item = state.handoverDefects.logs[jobId].warrantyItems[idx];
+  try{
+    const saved = await saveFilesToJob(jobId, 'warranties', item.itemName || 'item', files);
+    item.files.push(...saved);
+    scheduleSave();
+    renderHandoverBody();
+  }catch(err){
+    alert('Could not save those files: ' + err.message);
+  }
+}
+async function removeWarrantyFile(jobId, itemIdx, fileIdx){
+  if(!confirm('Remove this file? It will be deleted from your job files folder too.')) return;
+  const item = state.handoverDefects.logs[jobId].warrantyItems[itemIdx];
+  const [file] = item.files.splice(fileIdx,1);
+  if(file) await deleteStoredFile(jobId, 'warranties', file.storedName);
+  scheduleSave();
+  renderHandoverBody();
+}
+
+/* --- Defects Tracking --- */
+function renderDefectsTracking(){
+  const jobId = state.handoverDefects.selectedJobId;
+  const defects = state.handoverDefects.logs[jobId].defects;
+  const tradeOptions = state.contacts.trades.map(t=>t.category).filter(Boolean);
+  const openCount = defects.filter(d=>d.status!=='Closed').length;
+  return `
+    <div class="panel">
+      <div class="stat-row">
+        <div class="stat-card"><div class="stat-label">Open / in progress</div><div class="stat-value">${openCount}</div></div>
+        <div class="stat-card"><div class="stat-label">Total logged</div><div class="stat-value">${defects.length}</div></div>
+      </div>
+      <div class="no-print" style="margin-bottom:14px;">
+        <button type="button" class="btn btn-ghost btn-sm" onclick="exportDefectsList()">🖨️ Print / Save Defects List (PDF)</button>
+      </div>
+      ${defects.map((d,idx)=>renderDefectCard(jobId, d, idx, tradeOptions)).join('') || '<p class="muted">No defects logged yet.</p>'}
+      <button type="button" class="btn btn-ghost btn-sm" onclick="addRow('handoverDefects.logs.${jobId}.defects')">+ Add defect</button>
+    </div>
+  `;
+}
+function renderDefectCard(jobId, d, idx, tradeOptions){
+  return `
+    <div class="hd-card">
+      <div class="hd-card-head">
+        <input type="text" class="hd-item-name" placeholder="Defect description" data-path="handoverDefects.logs.${jobId}.defects.${idx}.description" value="${escapeHtml(d.description)}">
+        <select data-path="handoverDefects.logs.${jobId}.defects.${idx}.status" data-pill="true" class="${statusClass(d.status)}">
+          ${DEFECT_STATUSES.map(s=>`<option ${s===d.status?'selected':''}>${s}</option>`).join('')}
+        </select>
+        <button type="button" class="icon-btn danger" title="Delete defect" onclick="deleteRow('handoverDefects.logs.${jobId}.defects',${idx})">✕</button>
+      </div>
+      <div class="hd-card-grid">
+        <div class="field"><label class="field-label">Location / Area</label><input type="text" data-path="handoverDefects.logs.${jobId}.defects.${idx}.location" value="${escapeHtml(d.location)}"></div>
+        <div class="field"><label class="field-label">Trade Responsible</label>
+          <select data-path="handoverDefects.logs.${jobId}.defects.${idx}.tradeCategory">
+            <option value="">—</option>
+            ${tradeOptions.map(t=>`<option ${t===d.tradeCategory?'selected':''}>${escapeHtml(t)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field"><label class="field-label">Stage</label>
+          <select data-path="handoverDefects.logs.${jobId}.defects.${idx}.stage">
+            ${DEFECT_STAGES.map(s=>`<option ${s===d.stage?'selected':''}>${s}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field"><label class="field-label">Identified By</label>
+          <select data-path="handoverDefects.logs.${jobId}.defects.${idx}.identifiedBy">
+            ${DEFECT_IDENTIFIED_BY.map(s=>`<option ${s===d.identifiedBy?'selected':''}>${s}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field"><label class="field-label">Date Identified</label>${renderDatePickerField({ path:`handoverDefects.logs.${jobId}.defects.${idx}.dateIdentified`, value: d.dateIdentified })}</div>
+        <div class="field"><label class="field-label">Date Closed Out</label>${renderDatePickerField({ path:`handoverDefects.logs.${jobId}.defects.${idx}.dateClosed`, value: d.dateClosed })}</div>
+      </div>
+      <div class="field"><label class="field-label">Notes</label><textarea data-path="handoverDefects.logs.${jobId}.defects.${idx}.notes" rows="2">${escapeHtml(d.notes)}</textarea></div>
+      <div class="hd-files">
+        <label class="field-label">Photos ${d.photos.length ? `<span class="hd-ok-badge">${d.photos.length} attached</span>` : ''}</label>
+        <div class="hd-file-list">
+          ${d.photos.map((f,fi)=>`
+            <span class="hd-file-chip">
+              <button type="button" onclick="openStoredFile('${jobId}','defects','${f.storedName}')">🖼️ ${escapeHtml(f.name)}</button>
+              <button type="button" class="hd-file-remove" title="Remove photo" onclick="removeDefectPhoto('${jobId}',${idx},${fi})">✕</button>
+            </span>
+          `).join('')}
+        </div>
+        <input type="file" multiple accept="image/*,.pdf" id="hd-dupload-${jobId}-${idx}" style="display:none" onchange="handleDefectUpload(event,'${jobId}',${idx})">
+        <button type="button" class="btn btn-ghost btn-sm no-print" onclick="document.getElementById('hd-dupload-${jobId}-${idx}').click()">+ Attach photo(s)</button>
+      </div>
+    </div>
+  `;
+}
+async function handleDefectUpload(e, jobId, idx){
+  const files = Array.from(e.target.files || []);
+  e.target.value = '';
+  if(!files.length) return;
+  if(!jobFilesRootHandle){ alert('Connect your job files folder first (button at the top of this page).'); return; }
+  const defect = state.handoverDefects.logs[jobId].defects[idx];
+  try{
+    const saved = await saveFilesToJob(jobId, 'defects', defect.description || 'defect', files);
+    defect.photos.push(...saved);
+    scheduleSave();
+    renderHandoverBody();
+  }catch(err){
+    alert('Could not save those files: ' + err.message);
+  }
+}
+async function removeDefectPhoto(jobId, defectIdx, fileIdx){
+  if(!confirm('Remove this photo? It will be deleted from your job files folder too.')) return;
+  const defect = state.handoverDefects.logs[jobId].defects[defectIdx];
+  const [file] = defect.photos.splice(fileIdx,1);
+  if(file) await deleteStoredFile(jobId, 'defects', file.storedName);
+  scheduleSave();
+  renderHandoverBody();
+}
+
+/* --- Export --- */
+function printWithMode(className){
+  document.body.classList.add(className);
+  window.print();
+  const cleanup = () => { document.body.classList.remove(className); window.removeEventListener('afterprint', cleanup); };
+  window.addEventListener('afterprint', cleanup);
+  setTimeout(cleanup, 4000);
+}
+function buildHandoverPackHtml(jobId){
+  const job = state.pipeline.activeJobs.find(j=>j.id===jobId);
+  const log = state.handoverDefects.logs[jobId] || { warrantyItems:[], defects:[] };
+  const licence = state.business.compliance.licence.number;
+  const grouped = {};
+  log.warrantyItems.forEach(i=>{ (grouped[i.category] || (grouped[i.category]=[])).push(i); });
+  const closedDefects = log.defects.filter(d=>d.status==='Closed');
+  return `
+    <div class="vt-sheet">
+      <div class="vt-print-header">
+        <div>
+          <div class="vt-brand-word">BATES</div>
+          <div class="vt-brand-sub">PROJECTS</div>
+          <div class="vt-brand-meta">Cabarita Beach · Tweed Coast &amp; Northern Rivers<br>Licence No. ${escapeHtml(licence)}</div>
+        </div>
+        <div class="vt-doc-title">
+          <h2>HANDOVER PACK</h2>
+          <div class="vt-doc-meta">
+            ${escapeHtml(job?.client || 'Untitled job')}<br>
+            ${escapeHtml(job?.address || '')}<br>
+            Completion Date: ${job?.finish ? formatDateDisplayFull(job.finish) : '—'}
+          </div>
+        </div>
+      </div>
+      <div class="hd-print-section">
+        <h3>Contents — Warranties, Certificates &amp; Documents</h3>
+        ${WARRANTY_CATEGORIES.map(cat => {
+          const catItems = grouped[cat] || [];
+          if(!catItems.length) return '';
+          return `
+            <div class="hd-print-cat">
+              <div class="hd-print-cat-title">${escapeHtml(cat)}</div>
+              <ul>
+                ${catItems.map(i=>`<li>${escapeHtml(i.itemName||'Untitled item')}${i.supplier?` — ${escapeHtml(i.supplier)}`:''}${i.warrantyExpiry?` (expires ${formatDateDisplayFull(i.warrantyExpiry)})`:''}${i.files.length===0?' <span class="hd-missing-inline">— document not attached</span>':''}</li>`).join('')}
+              </ul>
+            </div>
+          `;
+        }).join('') || '<p class="muted">No warranty or certificate items recorded yet.</p>'}
+      </div>
+      <div class="hd-print-section">
+        <h3>Defects — Closed / Rectified</h3>
+        ${closedDefects.length ? `
+          <table class="hd-print-table">
+            <thead><tr><th>Description</th><th>Location</th><th>Stage</th><th>Date Closed</th></tr></thead>
+            <tbody>
+              ${closedDefects.map(d=>`<tr><td>${escapeHtml(d.description)}</td><td>${escapeHtml(d.location)}</td><td>${escapeHtml(d.stage)}</td><td>${d.dateClosed?formatDateDisplayFull(d.dateClosed):'—'}</td></tr>`).join('')}
+            </tbody>
+          </table>
+        ` : `<p class="muted">No closed defects recorded for this job.</p>`}
+      </div>
+      <p class="vt-terms">This pack lists the warranty, certificate and compliance documents provided for this project, along with a summary of defects identified and rectified. The documents themselves are stored in your connected job files folder and are not embedded in this PDF — attach them separately, or share the job folder, when sending this pack. Products and workmanship remain subject to their individual manufacturer/supplier warranty terms and the statutory warranty periods under the Home Building Act 1989 (NSW).</p>
+    </div>
+  `;
+}
+function buildDefectsListHtml(jobId){
+  const job = state.pipeline.activeJobs.find(j=>j.id===jobId);
+  const log = state.handoverDefects.logs[jobId] || { defects: [] };
+  const licence = state.business.compliance.licence.number;
+  return `
+    <div class="vt-sheet">
+      <div class="vt-print-header">
+        <div>
+          <div class="vt-brand-word">BATES</div>
+          <div class="vt-brand-sub">PROJECTS</div>
+          <div class="vt-brand-meta">Licence No. ${escapeHtml(licence)}</div>
+        </div>
+        <div class="vt-doc-title">
+          <h2>DEFECTS LIST</h2>
+          <div class="vt-doc-meta">${escapeHtml(job?.client||'Untitled job')}<br>${escapeHtml(job?.address||'')}<br>${formatDateDisplayFull(todayStr())}</div>
+        </div>
+      </div>
+      <table class="hd-print-table">
+        <thead><tr><th>Description</th><th>Location</th><th>Stage</th><th>Status</th><th>Trade</th><th>Identified</th><th>Closed</th></tr></thead>
+        <tbody>
+          ${log.defects.length ? log.defects.map(d=>`<tr><td>${escapeHtml(d.description)}</td><td>${escapeHtml(d.location)}</td><td>${escapeHtml(d.stage)}</td><td>${escapeHtml(d.status)}</td><td>${escapeHtml(d.tradeCategory)}</td><td>${d.dateIdentified?formatDateDisplayFull(d.dateIdentified):'—'}</td><td>${d.dateClosed?formatDateDisplayFull(d.dateClosed):'—'}</td></tr>`).join('') : '<tr><td colspan="7" class="muted">No defects recorded.</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+function exportHandoverPack(){
+  const jobId = state.handoverDefects.selectedJobId;
+  document.getElementById('handover-pack-print-root').innerHTML = buildHandoverPackHtml(jobId);
+  printWithMode('printing-handover-pack');
+}
+function exportDefectsList(){
+  const jobId = state.handoverDefects.selectedJobId;
+  document.getElementById('defects-list-print-root').innerHTML = buildDefectsListHtml(jobId);
+  printWithMode('printing-defects-list');
+}
+
+/* ---------------------------------------------------------------
+   16. FINANCE
 --------------------------------------------------------------- */
 let financeTab = 'overheads';
 function renderFinance(main){
@@ -2020,7 +2583,7 @@ function renderFinanceBody(){
 }
 
 /* ---------------------------------------------------------------
-   16. MARKETING & GROWTH
+   17. MARKETING & GROWTH
 --------------------------------------------------------------- */
 function renderMarketing(main){
   const w = state.marketing.website;
@@ -2065,7 +2628,7 @@ function renderMarketing(main){
 }
 
 /* ---------------------------------------------------------------
-   17. CONTACTS
+   18. CONTACTS
 --------------------------------------------------------------- */
 let contactsTab = 'trades';
 function renderContacts(main){
@@ -2157,7 +2720,7 @@ function deleteTradeCategory(){
 }
 
 /* ---------------------------------------------------------------
-   18. SITE DIARY
+   19. SITE DIARY
    Optional job scope, same id-based linking as Site Time: pick
    "General", an Active Job, or a Pipeline Lead, and entries are kept
    separate per scope so you can pull up just one job's notes later.
@@ -2247,7 +2810,7 @@ function renderSiteDiaryBody(){
 }
 
 /* ---------------------------------------------------------------
-   19. TO-DO LIST
+   20. TO-DO LIST
    Same optional job scope as Site Diary: General Bates Projects
    To-Do List by default, or pick an Active Job / Pipeline Lead to
    keep that job's tasks separate.
@@ -2365,10 +2928,11 @@ function toggleTodoDone(i){
 function setTodoFilter(f){ todoFilter = f; renderTodos(document.getElementById('main')); }
 
 /* ---------------------------------------------------------------
-   20. INIT
+   21. INIT
 --------------------------------------------------------------- */
 buildSideNav();
 renderRoute();
+initJobFilesFolder();
 </script>
 </body>
 </html>
