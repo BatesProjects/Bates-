@@ -557,9 +557,14 @@ const DEFAULT_DATA = {
     }
   },
 
-  todos: [
-    { text: 'Sample task — edit or delete', done: false, due: '', priority: 'Medium' }
-  ]
+  todos: {
+    selectedScope: 'general',
+    logs: {
+      general: {
+        tasks: [ { text: 'Sample task — edit or delete', done: false, due: '', priority: 'Medium' } ]
+      }
+    }
+  }
 };
 
 /* ---------------------------------------------------------------
@@ -583,7 +588,14 @@ function loadState(){
   try{
     const raw = localStorage.getItem(STORAGE_KEY);
     if(!raw) return structuredClone(DEFAULT_DATA);
-    const merged = mergeDeep(DEFAULT_DATA, JSON.parse(raw));
+    const parsed = JSON.parse(raw);
+    // Todos saved before the per-job split was a flat top-level array, not an
+    // object — transform before merging so mergeDeep doesn't mishandle the
+    // type change (it only deep-merges object shapes, not array-to-object).
+    if(Array.isArray(parsed.todos)){
+      parsed.todos = { selectedScope: 'general', logs: { general: { tasks: parsed.todos } } };
+    }
+    const merged = mergeDeep(DEFAULT_DATA, parsed);
     delete merged.director; // retired section — drop any leftover saved data from older versions of this file
     // Active jobs and leads saved before ids existed won't have a stable id yet — Site Time and Site Diary link to them by id, not array position.
     merged.pipeline.activeJobs.forEach(job => { if(!job.id) job.id = uid(); });
@@ -1102,7 +1114,7 @@ function renderHome(main){
   const leadCount = state.pipeline.leads.length;
   const ovTotal = state.finance.overheads.categories.reduce((s,c)=>s+(Number(c.monthly)||0),0);
   const varCount = state.finance.variations.filter(v=>v.status==='Pending').length;
-  const openTodos = state.todos.filter(t=>!t.done).length;
+  const openTodos = Object.values(state.todos.logs).reduce((s,log)=>s+log.tasks.filter(t=>!t.done).length,0);
   const tradeContactCount = state.contacts.trades.reduce((s,t)=>s+t.contacts.length,0);
   const totalHoursLogged = Object.values(state.siteTime.logs).reduce((s,log)=>{
     const empH = (log.employees||[]).reduce((s2,r)=>s2+(Number(r.hours)||0),0);
@@ -1120,7 +1132,7 @@ function renderHome(main){
     { key:'marketing', icon:'📈', title:'Marketing & Growth', desc:'Website/SEO, ad performance, referral tracking.', stat: `${state.marketing.referrals.length} referral source(s)` },
     { key:'contacts', icon:'📇', title:'Contacts', desc:'Trade contacts by category, plus a supplier directory.', stat: `${tradeContactCount} trade contact(s) · ${state.contacts.suppliers.length} supplier(s)` },
     { key:'sitediary', icon:'📔', title:'Site Diary', desc:'Daily diary/reminders plus a lessons-learned journal, general or per job.', stat: `${totalDiaryEntries} entr${totalDiaryEntries===1?'y':'ies'}` },
-    { key:'todos', icon:'✅', title:'To-Do List', desc:'A running list for the business.', stat: `${openTodos} open task${openTodos===1?'':'s'}` }
+    { key:'todos', icon:'✅', title:'To-Do List', desc:'General business list, or pick a job to keep its tasks separate.', stat: `${openTodos} open task${openTodos===1?'':'s'}` }
   ];
   main.innerHTML = `
     <div class="home-header">
@@ -2009,15 +2021,59 @@ function renderSiteDiaryBody(){
 
 /* ---------------------------------------------------------------
    18. TO-DO LIST
+   Same optional job scope as Site Diary: General Bates Projects
+   To-Do List by default, or pick an Active Job / Pipeline Lead to
+   keep that job's tasks separate.
 --------------------------------------------------------------- */
 let todoFilter = 'open';
+function ensureTodoLog(scope){
+  if(!state.todos.logs[scope]) state.todos.logs[scope] = { tasks: [] };
+}
+function todoScopeLabel(scope){
+  if(!scope || scope === 'general') return 'General Bates Projects To-Do List';
+  if(scope.startsWith('job:')){
+    const j = state.pipeline.activeJobs.find(x=>x.id===scope.slice(4));
+    return j ? `${j.client||'Untitled'} (Active Job)` : 'General Bates Projects To-Do List';
+  }
+  if(scope.startsWith('lead:')){
+    const l = state.pipeline.leads.find(x=>x.id===scope.slice(5));
+    return l ? `${l.client||'Untitled'} (Pipeline Lead)` : 'General Bates Projects To-Do List';
+  }
+  return 'General Bates Projects To-Do List';
+}
 function renderTodos(main){
-  const openCount = state.todos.filter(t=>!t.done).length;
+  const activeJobs = state.pipeline.activeJobs;
+  const leads = state.pipeline.leads;
+  let scope = state.todos.selectedScope || 'general';
+  const scopeStillValid = scope === 'general'
+    || (scope.startsWith('job:') && activeJobs.some(j=>j.id===scope.slice(4)))
+    || (scope.startsWith('lead:') && leads.some(l=>l.id===scope.slice(5)));
+  if(!scopeStillValid) scope = 'general';
+  state.todos.selectedScope = scope;
+  ensureTodoLog(scope);
+  const openCount = state.todos.logs[scope].tasks.filter(t=>!t.done).length;
+  const scopeLabel = escapeHtml(todoScopeLabel(scope));
+
   main.innerHTML = `
     <div class="section-head">
-      <div><h1>To-Do List</h1><p>A running list for the business — not job-specific tasks (those live on the job's own programme in Scheduling).</p></div>
+      <div><h1>To-Do List</h1><p>General for the business overall, or pick a job to keep its tasks separate.</p></div>
     </div>
     <div class="panel">
+      <div class="field" style="max-width:420px;">
+        <label class="field-label">List</label>
+        <select onchange="selectTodoScope(this.value)">
+          <option value="general" ${scope==='general'?'selected':''}>General Bates Projects To-Do List</option>
+          ${activeJobs.length ? `<optgroup label="Active Jobs">
+            ${activeJobs.map(j=>`<option value="job:${j.id}" ${scope==='job:'+j.id?'selected':''}>${escapeHtml(j.client||'Untitled')} — ${escapeHtml(j.address||'')}</option>`).join('')}
+          </optgroup>` : ''}
+          ${leads.length ? `<optgroup label="Pipeline Leads">
+            ${leads.map(l=>`<option value="lead:${l.id}" ${scope==='lead:'+l.id?'selected':''}>${escapeHtml(l.client||'Untitled')} — ${escapeHtml(l.address||'')}</option>`).join('')}
+          </optgroup>` : ''}
+        </select>
+      </div>
+    </div>
+    <div class="panel">
+      <h3>${scopeLabel}</h3>
       <div class="todo-add-row">
         <div class="field"><label class="field-label">New task</label><input type="text" id="todo-new-text" placeholder="e.g. Chase HBCF cert for Client B job" onkeydown="if(event.key==='Enter') addTodo()"></div>
         <div class="field"><label class="field-label">Due (optional)</label>${renderDatePickerField({ id: 'todo-new-due', value: '' })}</div>
@@ -2035,19 +2091,27 @@ function renderTodos(main){
     <div class="panel" id="todo-list-panel">${renderTodoRows()}</div>
   `;
 }
+function selectTodoScope(scope){
+  state.todos.selectedScope = scope;
+  ensureTodoLog(scope);
+  scheduleSave();
+  renderTodos(document.getElementById('main'));
+}
 function renderTodoRows(){
-  const indexed = state.todos.map((t,i)=>({t,i}));
+  const scope = state.todos.selectedScope;
+  const tasks = state.todos.logs[scope].tasks;
+  const indexed = tasks.map((t,i)=>({t,i}));
   const filtered = todoFilter === 'all' ? indexed : indexed.filter(x => todoFilter === 'done' ? x.t.done : !x.t.done);
   if(!filtered.length) return `<p class="muted">Nothing here.</p>`;
   return `<div class="todo-list">${filtered.map(({t,i})=>`
     <div class="todo-row ${t.done?'is-done':''}">
       <input type="checkbox" onchange="toggleTodoDone(${i})" ${t.done?'checked':''}>
-      <input type="text" class="todo-text-input" data-path="todos.${i}.text" value="${escapeHtml(t.text)}">
-      ${renderDatePickerField({ path: `todos.${i}.due`, value: t.due })}
-      <select data-path="todos.${i}.priority" data-pill="true" class="${statusClass(t.priority)}">
+      <input type="text" class="todo-text-input" data-path="todos.logs.${scope}.tasks.${i}.text" value="${escapeHtml(t.text)}">
+      ${renderDatePickerField({ path: `todos.logs.${scope}.tasks.${i}.due`, value: t.due })}
+      <select data-path="todos.logs.${scope}.tasks.${i}.priority" data-pill="true" class="${statusClass(t.priority)}">
         ${['Low','Medium','High'].map(p=>`<option ${p===t.priority?'selected':''}>${p}</option>`).join('')}
       </select>
-      <button type="button" class="icon-btn danger" title="Delete task" onclick="deleteRow('todos',${i})">✕</button>
+      <button type="button" class="icon-btn danger" title="Delete task" onclick="deleteRow('todos.logs.${scope}.tasks',${i})">✕</button>
     </div>
   `).join('')}</div>`;
 }
@@ -2055,7 +2119,8 @@ function addTodo(){
   const textEl = document.getElementById('todo-new-text');
   const text = textEl.value.trim();
   if(!text){ textEl.focus(); return; }
-  state.todos.push({
+  const scope = state.todos.selectedScope;
+  state.todos.logs[scope].tasks.push({
     text,
     done: false,
     due: document.getElementById('todo-new-due').value,
@@ -2065,7 +2130,8 @@ function addTodo(){
   renderTodos(document.getElementById('main'));
 }
 function toggleTodoDone(i){
-  state.todos[i].done = !state.todos[i].done;
+  const scope = state.todos.selectedScope;
+  state.todos.logs[scope].tasks[i].done = !state.todos.logs[scope].tasks[i].done;
   scheduleSave();
   renderTodos(document.getElementById('main'));
 }
