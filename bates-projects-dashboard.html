@@ -325,6 +325,63 @@
 
   footer.app-footer{ text-align:center; padding: 20px; color: var(--text-faint); font-size:11.5px; }
 
+  /* ---------- Systems: printable document templates ---------- */
+  .vt-sheet{
+    background:#fdfdfa; color:#1a1c16; border-radius:8px; padding:34px;
+    max-width:820px; margin:0 auto; box-shadow:0 8px 30px rgba(0,0,0,0.35);
+  }
+  .vt-print-header{ display:flex; justify-content:space-between; align-items:flex-start; background:#24261f; color:#fff; padding:20px 26px; border-radius:5px; margin-bottom:26px; }
+  .vt-brand-word{ font-size:22px; font-weight:800; letter-spacing:0.07em; line-height:1; }
+  .vt-brand-sub{ font-size:10px; font-weight:700; letter-spacing:0.3em; color:#c7d6bb; margin-top:5px; }
+  .vt-brand-meta{ font-size:10.5px; color:#c7d6bb; margin-top:12px; line-height:1.6; }
+  .vt-doc-title{ text-align:right; }
+  .vt-doc-title h2{ font-size:17px; letter-spacing:0.05em; margin:0; color:#fff; }
+  .vt-doc-meta{ font-size:11px; color:#c7d6bb; margin-top:8px; line-height:1.8; }
+  .vt-doc-meta .vt-inline-input{ width:70px; display:inline-block; text-align:right; }
+  .vt-field-grid{ display:grid; grid-template-columns: 1fr 1fr; gap:16px; margin-bottom:22px; }
+  .vt-field label, .vt-section label, .vt-cost-box label, .vt-sign-block label{
+    display:block; font-size:10.5px; text-transform:uppercase; letter-spacing:0.04em; color:#6b6f5f; font-weight:700; margin-bottom:5px;
+  }
+  .vt-field-static{ font-size:14px; padding:6px 0; }
+  .vt-section{ margin-bottom:20px; }
+  .vt-cost-box{ background:#eef2e7; border:1px solid #cfd8c1; border-radius:6px; padding:16px 18px; margin-bottom:22px; }
+  .vt-cost-row{ display:grid; grid-template-columns: 1.3fr 1fr 1.3fr; gap:18px; align-items:end; }
+  .vt-cost-row .vt-value-row{ display:flex; align-items:center; gap:4px; }
+  .vt-cost-row .vt-value-row span{ font-size:15px; font-weight:700; }
+  .vt-cost-row .vt-value-row input{ font-size:16px; font-weight:700; }
+  .vt-terms{ font-size:10.5px; color:#4a4d3f; line-height:1.6; border-top:1px solid #d8dbcf; padding-top:14px; margin-bottom:26px; }
+  .vt-sign-grid{ display:grid; grid-template-columns: 1fr 1fr; gap:36px; }
+  .vt-sign-block .vt-sign-line{ border-top:1.5px solid #1a1c16; margin-bottom:6px; margin-top:34px; }
+  .vt-sign-block .vt-sign-role{ font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; color:#6b6f5f; margin-bottom:10px; }
+  .vt-sign-block input{ margin-bottom:8px; }
+  .vt-sheet input, .vt-sheet textarea, .vt-sheet select{
+    background:#f7f8f3; border:1px solid #d8dbcf; color:#1a1c16; border-radius:4px; padding:7px 9px; font-size:13px; width:100%;
+  }
+  .vt-sheet textarea{ min-height:70px; }
+  .vt-sheet input:focus, .vt-sheet textarea:focus, .vt-sheet select:focus{ border-color:#87a86b; }
+  .vt-sheet .date-field-display{ background:#f7f8f3 !important; border-color:#d8dbcf !important; color:#1a1c16 !important; }
+
+  @media print{
+    html, body{ background:#fff !important; }
+    #sidebar, #topbar, footer.app-footer{ display:none !important; }
+    #main *{ visibility:hidden; }
+    #variation-print-root, #variation-print-root *{ visibility:visible; }
+    #variation-print-root{ position:absolute; top:0; left:0; width:100%; margin:0; padding:0; box-shadow:none; border-radius:0; max-width:none; }
+    .no-print{ display:none !important; }
+    @page{ size:A4; margin:15mm; }
+    /* Tightened spacing so a typical variation fits on one page */
+    .vt-print-header{ padding:12px 18px; margin-bottom:14px; }
+    .vt-brand-meta{ margin-top:6px; line-height:1.4; }
+    .vt-doc-meta{ margin-top:5px; line-height:1.5; }
+    .vt-field-grid{ margin-bottom:12px; gap:10px; }
+    .vt-section{ margin-bottom:12px; }
+    .vt-sheet textarea{ min-height:44px; }
+    .vt-cost-box{ padding:10px 14px; margin-bottom:12px; }
+    .vt-terms{ padding-top:8px; margin-bottom:14px; }
+    .vt-sign-block .vt-sign-line{ margin-top:20px; margin-bottom:4px; }
+    .vt-sheet input, .vt-sheet textarea, .vt-sheet select{ padding:4px 7px; }
+  }
+
   @media (max-width: 860px){
     body{ flex-direction:column; }
     #sidebar{ position:relative; height:auto; width:100%; flex-direction:row; align-items:center; overflow-x:auto; }
@@ -448,6 +505,26 @@ const DEFAULT_DATA = {
     quotesLog: [
       { job: 'Prospect C — Kitchen Renovation', dateSent: '', value: 32000, status: 'Sent' }
     ]
+  },
+
+  systems: {
+    variationTemplate: {
+      variationNo: '',
+      date: '',
+      clientName: '',
+      siteAddress: '',
+      contractDate: '',
+      scopeOfWorks: '',
+      reasonForVariation: '',
+      value: 0,
+      gst: 'Included',
+      timeImpactDays: 0,
+      paymentTerms: 'Due prior to commencement of varied work.',
+      clientSignatureName: '',
+      clientSignatureDate: '',
+      builderSignatureName: 'Wilson Bates',
+      builderSignatureDate: ''
+    }
   },
 
   scheduling: {
@@ -1079,6 +1156,7 @@ const ROUTES = [
   { key:'business', label:'The Business', icon:'🏗️', render: renderBusiness },
   { key:'pipeline', label:'Job Pipeline', icon:'📋', render: renderPipeline },
   { key:'estimating', label:'Estimating & Quoting', icon:'🧮', render: renderEstimating },
+  { key:'systems', label:'Systems', icon:'🗂️', render: renderSystems },
   { key:'scheduling', label:'Scheduling', icon:'📅', render: renderScheduling },
   { key:'sitetime', label:'Site Time', icon:'⏱️', render: renderSiteTime },
   { key:'finance', label:'Finance', icon:'💰', render: renderFinance },
@@ -1126,6 +1204,7 @@ function renderHome(main){
     { key:'business', icon:'🏗️', title:'The Business', desc:'Vision & goals, build process, systems guide, compliance & licensing.', stat: 'Lic. 480112C · $20M PL' },
     { key:'pipeline', icon:'📋', title:'Job Pipeline', desc:'Active jobs, pipeline planner, leads & enquiries tracker.', stat: `${jobCount} active job${jobCount===1?'':'s'} · ${leadCount} lead${leadCount===1?'':'s'}` },
     { key:'estimating', icon:'🧮', title:'Estimating & Quoting', desc:'PriceBook reference, workflow checklists, quotes log.', stat: `${state.estimating.quotesLog.length} quote(s) logged` },
+    { key:'systems', icon:'🗂️', title:'Systems', desc:'Fillable document templates — fill in, then print or save as PDF.', stat: 'Variation Notice template' },
     { key:'scheduling', icon:'📅', title:'Scheduling', desc:'Programme / Gantt overview per job.', stat: `${state.scheduling.jobs.length} job programme(s)` },
     { key:'sitetime', icon:'⏱️', title:'Site Time', desc:'Employee wages and trade hours by week, per active job.', stat: `${totalHoursLogged} hour${totalHoursLogged===1?'':'s'} logged` },
     { key:'finance', icon:'💰', title:'Finance', desc:'Overhead audit, cash flow snapshot, job margin & risk, variations.', stat: `${formatCurrency(ovTotal)}/mo overhead · ${varCount} variation(s) pending` },
@@ -1450,7 +1529,155 @@ function copyPriceBookPath(){
 }
 
 /* ---------------------------------------------------------------
-   12. SCHEDULING
+   12. SYSTEMS
+   Fillable document templates. Each one is a single reusable form —
+   filling it in doesn't consume or overwrite the template, "Clear"
+   just resets the fields. "Print / Save as PDF" uses the browser's
+   own print dialog (no library, works offline) — the print stylesheet
+   hides everything except the document itself.
+--------------------------------------------------------------- */
+let systemsTab = 'variation';
+function renderSystems(main){
+  main.innerHTML = `
+    <div class="section-head">
+      <div><h1>Systems</h1><p>Fillable document templates — fill in the form, then print or save as PDF. More templates can be added here over time.</p></div>
+    </div>
+    <div class="subnav">
+      <button class="subnav-btn ${systemsTab==='variation'?'active':''}" onclick="setSystemsTab('variation')">Variation Notice</button>
+    </div>
+    <div id="systems-body"></div>
+  `;
+  renderSystemsBody();
+}
+function setSystemsTab(tab){ systemsTab = tab; renderSystems(document.getElementById('main')); }
+function renderSystemsBody(){
+  const body = document.getElementById('systems-body');
+  if(systemsTab === 'variation') body.innerHTML = renderVariationTemplate();
+}
+function renderVariationTemplate(){
+  const vt = state.systems.variationTemplate;
+  const jobs = state.pipeline.activeJobs;
+  const leads = state.pipeline.leads;
+  const licence = state.business.compliance.licence.number;
+  return `
+    <div class="panel no-print">
+      <div class="field" style="max-width:420px;">
+        <label class="field-label">Autofill client & address from a job (optional)</label>
+        <select onchange="applyVariationJobAutofill(this.value)">
+          <option value="">— Select a job —</option>
+          ${jobs.length ? `<optgroup label="Active Jobs">
+            ${jobs.map(j=>`<option value="job:${j.id}">${escapeHtml(j.client||'Untitled')} — ${escapeHtml(j.address||'')}</option>`).join('')}
+          </optgroup>` : ''}
+          ${leads.length ? `<optgroup label="Pipeline Leads">
+            ${leads.map(l=>`<option value="lead:${l.id}">${escapeHtml(l.client||'Untitled')} — ${escapeHtml(l.address||'')}</option>`).join('')}
+          </optgroup>` : ''}
+        </select>
+      </div>
+      <div style="display:flex; gap:8px; margin-top:16px;">
+        <button type="button" class="btn btn-primary" onclick="window.print()">🖨️ Print / Save as PDF</button>
+        <button type="button" class="btn btn-ghost" onclick="clearVariationTemplate()">Clear form</button>
+      </div>
+      <p class="faint" style="margin-top:10px;">Print opens your browser's print dialog — choose "Save as PDF" as the destination instead of printing to get a PDF file. Clearing only resets this on-screen form; it doesn't affect anything you've already saved or printed.</p>
+    </div>
+
+    <div id="variation-print-root" class="vt-sheet">
+      <div class="vt-print-header">
+        <div>
+          <div class="vt-brand-word">BATES</div>
+          <div class="vt-brand-sub">PROJECTS</div>
+          <div class="vt-brand-meta">
+            Cabarita Beach · Tweed Coast &amp; Northern Rivers<br>
+            Licence No. ${escapeHtml(licence)}
+          </div>
+        </div>
+        <div class="vt-doc-title">
+          <h2>VARIATION NOTICE</h2>
+          <div class="vt-doc-meta">
+            Variation No. <input class="vt-inline-input" type="text" data-path="systems.variationTemplate.variationNo" value="${escapeHtml(vt.variationNo)}"><br>
+            Date: ${renderDatePickerField({ path:'systems.variationTemplate.date', value: vt.date })}
+          </div>
+        </div>
+      </div>
+
+      <div class="vt-field-grid">
+        <div class="vt-field"><label>Client Name</label><input type="text" data-path="systems.variationTemplate.clientName" value="${escapeHtml(vt.clientName)}"></div>
+        <div class="vt-field"><label>Site Address</label><input type="text" data-path="systems.variationTemplate.siteAddress" value="${escapeHtml(vt.siteAddress)}"></div>
+        <div class="vt-field"><label>Original Contract Date</label>${renderDatePickerField({ path:'systems.variationTemplate.contractDate', value: vt.contractDate })}</div>
+        <div class="vt-field"><label>Builder Licence No.</label><div class="vt-field-static">${escapeHtml(licence)}</div></div>
+      </div>
+
+      <div class="vt-section">
+        <label>Scope of Works / Description of Variation</label>
+        <textarea data-path="systems.variationTemplate.scopeOfWorks" rows="5" placeholder="What is changing from the original contract scope...">${escapeHtml(vt.scopeOfWorks)}</textarea>
+      </div>
+      <div class="vt-section">
+        <label>Reason for Variation</label>
+        <textarea data-path="systems.variationTemplate.reasonForVariation" rows="3" placeholder="e.g. client request, unforeseen site condition, compliance requirement...">${escapeHtml(vt.reasonForVariation)}</textarea>
+      </div>
+
+      <div class="vt-cost-box">
+        <div class="vt-cost-row">
+          <div>
+            <label>Value of Variation</label>
+            <div class="vt-value-row"><span>$</span><input type="number" step="any" data-path="systems.variationTemplate.value" value="${vt.value===undefined||vt.value===''?'':vt.value}"></div>
+          </div>
+          <div>
+            <label>GST</label>
+            <select data-path="systems.variationTemplate.gst">
+              ${['Included','Excluded'].map(g=>`<option ${g===vt.gst?'selected':''}>${g}</option>`).join('')}
+            </select>
+          </div>
+          <div>
+            <label>Time Impact (days added to contract period)</label>
+            <input type="number" step="any" data-path="systems.variationTemplate.timeImpactDays" value="${vt.timeImpactDays===undefined||vt.timeImpactDays===''?'':vt.timeImpactDays}">
+          </div>
+        </div>
+      </div>
+
+      <div class="vt-section">
+        <label>Payment Terms</label>
+        <textarea data-path="systems.variationTemplate.paymentTerms" rows="2">${escapeHtml(vt.paymentTerms)}</textarea>
+      </div>
+
+      <p class="vt-terms">This variation forms part of, and is subject to, the terms and conditions of the original building contract between the parties. Work associated with this variation will not proceed until this notice has been signed by both parties and returned to the builder. Please retain a copy for your records.</p>
+
+      <div class="vt-sign-grid">
+        <div class="vt-sign-block">
+          <div class="vt-sign-role">Client Signature</div>
+          <div class="vt-sign-line"></div>
+          <input type="text" placeholder="Print name" data-path="systems.variationTemplate.clientSignatureName" value="${escapeHtml(vt.clientSignatureName)}">
+          ${renderDatePickerField({ path:'systems.variationTemplate.clientSignatureDate', value: vt.clientSignatureDate })}
+        </div>
+        <div class="vt-sign-block">
+          <div class="vt-sign-role">Builder Signature</div>
+          <div class="vt-sign-line"></div>
+          <input type="text" placeholder="Print name" data-path="systems.variationTemplate.builderSignatureName" value="${escapeHtml(vt.builderSignatureName)}">
+          ${renderDatePickerField({ path:'systems.variationTemplate.builderSignatureDate', value: vt.builderSignatureDate })}
+        </div>
+      </div>
+    </div>
+  `;
+}
+function applyVariationJobAutofill(value){
+  if(!value) return;
+  let job = null;
+  if(value.startsWith('job:')) job = state.pipeline.activeJobs.find(j=>j.id===value.slice(4));
+  else if(value.startsWith('lead:')) job = state.pipeline.leads.find(l=>l.id===value.slice(5));
+  if(!job) return;
+  state.systems.variationTemplate.clientName = job.client || '';
+  state.systems.variationTemplate.siteAddress = job.address || '';
+  scheduleSave();
+  renderSystems(document.getElementById('main'));
+}
+function clearVariationTemplate(){
+  if(!confirm('Clear this form? This only resets the on-screen fields — anything already printed or saved as PDF is unaffected.')) return;
+  state.systems.variationTemplate = structuredClone(DEFAULT_DATA.systems.variationTemplate);
+  scheduleSave();
+  renderSystems(document.getElementById('main'));
+}
+
+/* ---------------------------------------------------------------
+   13. SCHEDULING
 --------------------------------------------------------------- */
 function renderScheduling(main){
   const jobs = state.scheduling.jobs;
@@ -1600,7 +1827,7 @@ function startBarDrag(e, taskIdx){
 }
 
 /* ---------------------------------------------------------------
-   13. SITE TIME
+   14. SITE TIME
    Job selector here reads directly from pipeline.activeJobs (by id),
    so it always matches Job Pipeline's Active Jobs — there's no
    separate job list to keep in sync. Trade options read from
@@ -1681,7 +1908,7 @@ function selectSiteTimeJob(jobId){
 }
 
 /* ---------------------------------------------------------------
-   14. FINANCE
+   15. FINANCE
 --------------------------------------------------------------- */
 let financeTab = 'overheads';
 function renderFinance(main){
@@ -1793,7 +2020,7 @@ function renderFinanceBody(){
 }
 
 /* ---------------------------------------------------------------
-   15. MARKETING & GROWTH
+   16. MARKETING & GROWTH
 --------------------------------------------------------------- */
 function renderMarketing(main){
   const w = state.marketing.website;
@@ -1838,7 +2065,7 @@ function renderMarketing(main){
 }
 
 /* ---------------------------------------------------------------
-   16. CONTACTS
+   17. CONTACTS
 --------------------------------------------------------------- */
 let contactsTab = 'trades';
 function renderContacts(main){
@@ -1930,7 +2157,7 @@ function deleteTradeCategory(){
 }
 
 /* ---------------------------------------------------------------
-   17. SITE DIARY
+   18. SITE DIARY
    Optional job scope, same id-based linking as Site Time: pick
    "General", an Active Job, or a Pipeline Lead, and entries are kept
    separate per scope so you can pull up just one job's notes later.
@@ -2020,7 +2247,7 @@ function renderSiteDiaryBody(){
 }
 
 /* ---------------------------------------------------------------
-   18. TO-DO LIST
+   19. TO-DO LIST
    Same optional job scope as Site Diary: General Bates Projects
    To-Do List by default, or pick an Active Job / Pipeline Lead to
    keep that job's tasks separate.
@@ -2138,7 +2365,7 @@ function toggleTodoDone(i){
 function setTodoFilter(f){ todoFilter = f; renderTodos(document.getElementById('main')); }
 
 /* ---------------------------------------------------------------
-   19. INIT
+   20. INIT
 --------------------------------------------------------------- */
 buildSideNav();
 renderRoute();
