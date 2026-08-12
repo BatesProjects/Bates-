@@ -399,6 +399,8 @@
   .hd-file-chip .hd-file-remove:hover{ color: var(--danger); }
   .hd-missing-badge{ color: var(--danger); font-weight:700; text-transform:none; letter-spacing:0; margin-left:6px; }
   .hd-ok-badge{ color: var(--success); font-weight:700; text-transform:none; letter-spacing:0; margin-left:6px; }
+  .pf-file-link{ background:transparent; border:none; color: var(--accent); font-weight:600; font-size:12.5px; cursor:pointer; padding:2px 0; text-align:left; }
+  .pf-file-link:hover{ text-decoration: underline; }
   .hd-connect-banner{ display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
 
   /* Printed handover pack / defects list documents */
@@ -592,8 +594,8 @@ const DEFAULT_DATA = {
   },
 
   /* Projects is the single shared "which job am I looking at" selector —
-     Scheduling, Site Time, Handover & Defects, Site Diary and To-Do all read
-     projects.selectedScope instead of keeping their own, so switching tabs
+     Scheduling, Site Time, Files, Site Diary, To-Do and Handover & Defects all
+     read projects.selectedScope instead of keeping their own, so switching tabs
      never leaves you on a different job than you thought. */
   projects: {
     selectedScope: 'general'
@@ -616,6 +618,14 @@ const DEFAULT_DATA = {
 
   siteTime: {
     logs: {}
+  },
+
+  projectFiles: {
+    logs: {}
+    /* logs[scope] = { files: [...] } — created on first use of a job/lead.
+       Uploaded files are NOT stored here (or anywhere in localStorage) — only
+       their name/metadata is. The actual bytes live on disk in the job files
+       folder you connect (shared with Handover & Defects — see FILES section). */
   },
 
   handoverDefects: {
@@ -1334,7 +1344,7 @@ function renderHome(main){
     { key:'pipeline', icon:'📋', title:'Job Pipeline', desc:'Active jobs, pipeline planner, leads & enquiries tracker.', stat: `${jobCount} active job${jobCount===1?'':'s'} · ${leadCount} lead${leadCount===1?'':'s'}` },
     { key:'estimating', icon:'🧮', title:'Estimating & Quoting', desc:'PriceBook reference, workflow checklists, quotes log.', stat: `${state.estimating.quotesLog.length} quote(s) logged` },
     { key:'systems', icon:'🗂️', title:'Systems', desc:'Fillable document templates — fill in, then print or save as PDF.', stat: 'Variation Notice template' },
-    { key:'projects', icon:'📁', title:'Projects', desc:'Pick a job once — Scheduling, Site Time, Handover & Defects, Site Diary and To-Do all follow it.', stat: `${totalHoursLogged} hr logged · ${handoverWarrantyCount} warranty item(s) · ${handoverOpenDefects} open defect(s) · ${totalDiaryEntries} diary entr${totalDiaryEntries===1?'y':'ies'} · ${openTodos} open task${openTodos===1?'':'s'}` },
+    { key:'projects', icon:'📁', title:'Projects', desc:'Pick a job once — Scheduling, Site Time, Files, Site Diary, To-Do and Handover & Defects all follow it.', stat: `${totalHoursLogged} hr logged · ${handoverWarrantyCount} warranty item(s) · ${handoverOpenDefects} open defect(s) · ${totalDiaryEntries} diary entr${totalDiaryEntries===1?'y':'ies'} · ${openTodos} open task${openTodos===1?'':'s'}` },
     { key:'finance', icon:'💰', title:'Finance', desc:'Overhead audit, cash flow snapshot, job margin & risk, variations.', stat: `${formatCurrency(ovTotal)}/mo overhead · ${varCount} variation(s) pending` },
     { key:'marketing', icon:'📈', title:'Marketing & Growth', desc:'Website/SEO, ad performance, referral tracking.', stat: `${state.marketing.referrals.length} referral source(s)` },
     { key:'contacts', icon:'📇', title:'Contacts', desc:'Trade contacts by category, plus a supplier directory.', stat: `${tradeContactCount} trade contact(s) · ${state.contacts.suppliers.length} supplier(s)` }
@@ -1804,8 +1814,8 @@ function clearVariationTemplate(){
 
 /* ---------------------------------------------------------------
    13. PROJECTS
-   The single shared job selector for the five job-scoped tabs below
-   (Scheduling, Site Time, Handover & Defects, Site Diary, To-Do) —
+   The single shared job selector for the six job-scoped tabs below
+   (Scheduling, Site Time, Files, Site Diary, To-Do, Handover & Defects) —
    pick a job once here and every tab follows it, so you can't end up
    looking at Site Time for one job while thinking you're still on the
    one you had selected in Scheduling.
@@ -1823,7 +1833,7 @@ function renderProjects(main){
 
   main.innerHTML = `
     <div class="section-head">
-      <div><h1>Projects</h1><p>Pick a job once — Scheduling, Site Time, Handover & Defects, Site Diary and To-Do all follow the same selection.</p></div>
+      <div><h1>Projects</h1><p>Pick a job once — Scheduling, Site Time, Files, Site Diary, To-Do and Handover & Defects all follow the same selection.</p></div>
     </div>
     <div class="panel">
       <div class="field" style="max-width:420px;">
@@ -1842,9 +1852,10 @@ function renderProjects(main){
     <div class="subnav">
       <button class="subnav-btn ${projectsTab==='scheduling'?'active':''}" onclick="setProjectsTab('scheduling')">Scheduling</button>
       <button class="subnav-btn ${projectsTab==='sitetime'?'active':''}" onclick="setProjectsTab('sitetime')">Site Time</button>
-      <button class="subnav-btn ${projectsTab==='handover'?'active':''}" onclick="setProjectsTab('handover')">Handover & Defects</button>
+      <button class="subnav-btn ${projectsTab==='files'?'active':''}" onclick="setProjectsTab('files')">Files</button>
       <button class="subnav-btn ${projectsTab==='sitediary'?'active':''}" onclick="setProjectsTab('sitediary')">Site Diary</button>
       <button class="subnav-btn ${projectsTab==='todos'?'active':''}" onclick="setProjectsTab('todos')">To-Do List</button>
+      <button class="subnav-btn ${projectsTab==='handover'?'active':''}" onclick="setProjectsTab('handover')">Handover & Defects</button>
     </div>
     <div id="projects-body"></div>
   `;
@@ -1863,6 +1874,8 @@ function renderProjectsBody(){
     body.innerHTML = renderSchedulingTab();
   } else if(projectsTab === 'sitetime'){
     body.innerHTML = renderSiteTimeTab();
+  } else if(projectsTab === 'files'){
+    body.innerHTML = renderFilesTab();
   } else if(projectsTab === 'handover'){
     body.innerHTML = renderHandoverTab();
     const scope = state.projects.selectedScope;
@@ -2193,7 +2206,80 @@ function renderSiteTimeTab(){
 }
 
 /* ---------------------------------------------------------------
-   16. HANDOVER & DEFECTS
+   16. FILES (a Projects tab)
+   Site plans, specification sheets and any other document for the
+   selected job or lead. Shares the same connected job files folder
+   as Handover & Defects (see initJobFilesFolder etc. below) — files
+   here are saved on disk under that job's folder, in a "project-files"
+   subfolder, so nothing is ever stuck inside localStorage.
+--------------------------------------------------------------- */
+const PROJECT_FILE_CATEGORIES = ['Plans','Specifications','Contracts','Photos','Other'];
+function ensureProjectFilesLog(scope){
+  if(!state.projectFiles.logs[scope]) state.projectFiles.logs[scope] = { files: [] };
+}
+function renderFilesTab(){
+  const scope = state.projects.selectedScope;
+  let html = renderJobFilesConnectionPanel();
+  if(scope === 'general'){
+    html += `<div class="panel"><p class="muted">Select an active job or pipeline lead above to store its files.</p></div>`;
+    return html;
+  }
+  ensureProjectFilesLog(scope);
+  html += renderProjectFilesPanel(scope);
+  return html;
+}
+function renderProjectFilesPanel(scope){
+  const files = state.projectFiles.logs[scope].files;
+  const uploadId = `pf-upload-${scope.replace(/[^a-zA-Z0-9]/g,'-')}`;
+  const rows = files.map((f,idx)=>`
+    <tr>
+      <td><button type="button" class="pf-file-link" onclick="openStoredFile('${scope}','project-files','${f.storedName}')">📎 ${escapeHtml(f.name)}</button></td>
+      <td><select data-path="projectFiles.logs.${scope}.files.${idx}.category">${PROJECT_FILE_CATEGORIES.map(c=>`<option ${c===f.category?'selected':''}>${c}</option>`).join('')}</select></td>
+      <td><input type="text" data-path="projectFiles.logs.${scope}.files.${idx}.notes" value="${escapeHtml(f.notes)}" placeholder="Description (optional)"></td>
+      <td class="faint">${f.addedDate ? formatDateDisplayFull(f.addedDate) : '—'}</td>
+      <td class="col-actions"><button type="button" class="icon-btn danger" title="Delete file" onclick="removeProjectFile('${scope}',${idx})">✕</button></td>
+    </tr>
+  `).join('');
+  return `
+    <div class="panel">
+      <h3>Project Files</h3>
+      <p class="panel-desc">Site plans, specification sheets and any other file for this job — stored as real files in your connected job files folder.</p>
+      <div class="table-scroll">
+        <table class="data-table">
+          <thead><tr><th>File</th><th>Category</th><th>Description</th><th>Added</th><th></th></tr></thead>
+          <tbody>${rows || `<tr><td colspan="5" class="empty-row">No files uploaded yet — add one below.</td></tr>`}</tbody>
+        </table>
+      </div>
+      <input type="file" multiple id="${uploadId}" style="display:none" onchange="handleProjectFilesUpload(event,'${scope}')">
+      <button type="button" class="btn btn-primary btn-sm" onclick="document.getElementById('${uploadId}').click()">+ Upload file(s)</button>
+    </div>
+  `;
+}
+async function handleProjectFilesUpload(e, scope){
+  const files = Array.from(e.target.files || []);
+  e.target.value = '';
+  if(!files.length) return;
+  if(!jobFilesRootHandle){ alert('Connect your job files folder first (button at the top of this page).'); return; }
+  try{
+    const saved = await saveFilesToJob(scope, 'project-files', 'file', files);
+    state.projectFiles.logs[scope].files.push(...saved.map(s => ({ ...s, category:'Other', notes:'' })));
+    scheduleSave();
+    renderProjectsBody();
+  }catch(err){
+    alert('Could not save those files: ' + err.message);
+  }
+}
+async function removeProjectFile(scope, idx){
+  if(!confirm('Delete this file? It will be removed from your job files folder too.')) return;
+  const log = state.projectFiles.logs[scope];
+  const [file] = log.files.splice(idx,1);
+  if(file) await deleteStoredFile(scope, 'project-files', file.storedName);
+  scheduleSave();
+  renderProjectsBody();
+}
+
+/* ---------------------------------------------------------------
+   17. HANDOVER & DEFECTS
    Job-scoped to Active Jobs only (handover is a late-stage process,
    so Pipeline Leads aren't offered here, unlike Site Diary/To-Do).
    Uploaded files are NEVER stored in state/localStorage — only their
@@ -2360,7 +2446,7 @@ function renderJobFilesConnectionPanel(){
   }
   if(jobFilesStatus === 'connected'){
     return `<div class="panel no-print hd-connect-banner">
-      <div><span style="color:var(--success); font-weight:700;">● Connected</span> <span class="faint">— warranty documents and defect photos save straight to your job files folder.</span></div>
+      <div><span style="color:var(--success); font-weight:700;">● Connected</span> <span class="faint">— plans, specs, warranty documents and defect photos all save straight to your job files folder.</span></div>
       <button type="button" class="btn btn-sm" onclick="connectJobFilesFolder()">Change folder</button>
     </div>`;
   }
@@ -2372,7 +2458,7 @@ function renderJobFilesConnectionPanel(){
   }
   return `<div class="panel no-print">
     <h3>Connect your job files folder</h3>
-    <p class="panel-desc">Pick a folder on your computer (e.g. "Bates Projects Job Files") once — warranty documents and defect photos will be saved there in a subfolder per job, as real files on your disk, not stuck inside the browser.</p>
+    <p class="panel-desc">Pick a folder on your computer (e.g. "Bates Projects Job Files") once — plans, specs, warranty documents and defect photos will be saved there in a subfolder per job, as real files on your disk, not stuck inside the browser.</p>
     <button type="button" class="btn btn-primary" onclick="connectJobFilesFolder()">Connect folder</button>
   </div>`;
 }
@@ -2677,7 +2763,7 @@ function exportDefectsList(){
 }
 
 /* ---------------------------------------------------------------
-   17. FINANCE
+   18. FINANCE
 --------------------------------------------------------------- */
 let financeTab = 'overheads';
 function renderFinance(main){
@@ -2789,7 +2875,7 @@ function renderFinanceBody(){
 }
 
 /* ---------------------------------------------------------------
-   18. MARKETING & GROWTH
+   19. MARKETING & GROWTH
 --------------------------------------------------------------- */
 function renderMarketing(main){
   const w = state.marketing.website;
@@ -2834,7 +2920,7 @@ function renderMarketing(main){
 }
 
 /* ---------------------------------------------------------------
-   19. CONTACTS
+   20. CONTACTS
 --------------------------------------------------------------- */
 let contactsTab = 'trades';
 function renderContacts(main){
@@ -2926,7 +3012,7 @@ function deleteTradeCategory(){
 }
 
 /* ---------------------------------------------------------------
-   20. SITE DIARY (a Projects tab)
+   21. SITE DIARY (a Projects tab)
    Supports all three scopes — General, Active Job, Pipeline Lead —
    unlike Scheduling/Site Time/Handover which need an active job.
 --------------------------------------------------------------- */
@@ -2984,7 +3070,7 @@ function renderSiteDiaryBody(){
 }
 
 /* ---------------------------------------------------------------
-   21. TO-DO LIST (a Projects tab)
+   22. TO-DO LIST (a Projects tab)
    Same scope options as Site Diary: General, Active Job, or
    Pipeline Lead — tasks are kept separate per scope.
 --------------------------------------------------------------- */
@@ -3070,7 +3156,7 @@ function toggleTodoDone(i){
 function setTodoFilter(f){ todoFilter = f; renderProjectsBody(); }
 
 /* ---------------------------------------------------------------
-   22. INIT
+   23. INIT
 --------------------------------------------------------------- */
 buildSideNav();
 renderRoute();
