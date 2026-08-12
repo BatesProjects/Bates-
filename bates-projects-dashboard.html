@@ -286,7 +286,7 @@
   .gantt-row-label{ width:170px; flex-shrink:0; font-size:12.5px; color:var(--text-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .gantt-row-track{ position:relative; display:grid; height:26px; background: var(--bg-input); border-radius:5px; flex:1; min-width:400px; }
   .gantt-day-col{ border-right:1px solid var(--border-soft); }
-  .gantt-day-col.weekend{ background: rgba(255,255,255,0.02); }
+  .gantt-day-col.week-end-divider{ border-right:2px solid var(--highlight); }
   .gantt-bar{
     grid-row:1; background: linear-gradient(90deg, var(--accent-dim), var(--accent));
     border-radius:5px; display:flex; align-items:center; justify-content:center;
@@ -296,6 +296,12 @@
   .gantt-bar:active{ cursor: grabbing; }
   .gantt-bar.dragging{ cursor: grabbing; z-index:2; box-shadow: 0 2px 10px rgba(0,0,0,0.4); opacity:0.92; }
   body.gantt-dragging{ cursor: grabbing; user-select: none; }
+  .gantt-tooltip{
+    position:fixed; z-index:500; background: var(--bg-card); border:1px solid var(--border);
+    border-radius: var(--radius-sm); padding:7px 10px; font-size:12px; color:var(--text);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.45); pointer-events:none; max-width:260px;
+  }
+  .gantt-tooltip strong{ color: var(--highlight); }
 
   /* ---------- Compliance ---------- */
   .compliance-item{ display:flex; gap:12px; }
@@ -855,6 +861,17 @@ function workingDaysBetween(start, finish){
     d = addDays(d, 1);
   }
   return count;
+}
+/* Shift a date by n working days (Mon-Fri), skipping weekends entirely. n may be negative. */
+function addWorkingDays(date, n){
+  let d = new Date(date);
+  let remaining = Math.abs(Number(n));
+  const step = n < 0 ? -1 : 1;
+  while(remaining > 0){
+    d = addDays(d, step);
+    if(!isWeekendDate(d)) remaining--;
+  }
+  return d;
 }
 /* Local-calendar-day ISO string — avoids the UTC-shift bug that
    .toISOString() has for any timezone ahead of UTC (e.g. Australia),
@@ -1835,7 +1852,7 @@ function renderSchedulingTab(){
   const log = state.scheduling.logs[scope];
   return `
     <div class="panel">
-      <p class="panel-desc">Add tasks with a start and finish date to see the bar chart build itself — weekends are shaded and never count as working days. Drag the ⠿ handle to reorder tasks — the Gantt above follows the same order.</p>
+      <p class="panel-desc">Add tasks with a start and finish date to see the bar chart build itself — the chart shows working days only (Mon–Fri), with a line marking the end of each week. Hover a bar to see its dates. Drag the ⠿ handle to reorder tasks — the Gantt above follows the same order.</p>
       <div class="gantt-wrap">${renderGanttChart(log)}</div>
       <h3 style="margin-top:20px;">Tasks</h3>
       ${renderTable(`scheduling.logs.${scope}.tasks`, [
@@ -1850,6 +1867,31 @@ function renderSchedulingTab(){
     </div>
   `;
 }
+/* Build the list of working (Mon-Fri) calendar days spanning minDate..maxDate inclusive. */
+function buildWorkingDayList(minDate, maxDate){
+  const list = [];
+  let d = new Date(minDate);
+  while(d <= maxDate){
+    if(!isWeekendDate(d)) list.push(new Date(d));
+    d = addDays(d, 1);
+  }
+  return list;
+}
+function sameCalendarDay(a,b){
+  return a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate();
+}
+/* Map a date onto its index in a working-day list. If the date itself falls on a
+   weekend (shouldn't normally happen, but dates can be hand-picked), snap forward
+   to the next working day or backward to the previous one. */
+function workingColIndex(list, date, snapForward){
+  for(let i=0;i<list.length;i++){ if(sameCalendarDay(list[i], date)) return i; }
+  if(snapForward){
+    for(let i=0;i<list.length;i++){ if(list[i] > date) return i; }
+    return list.length - 1;
+  }
+  for(let i=list.length-1;i>=0;i--){ if(list[i] < date) return i; }
+  return 0;
+}
 function renderGanttChart(job){
   const tasks = (job.tasks||[]).map((t,i)=>({...t, _idx:i}))
     .filter(t=>t.start && t.finish && parseDateStr(t.finish) >= parseDateStr(t.start));
@@ -1861,26 +1903,31 @@ function renderGanttChart(job){
   if(!starts.length) return `<p class="muted">Add valid dates to see the programme.</p>`;
   const minDate = new Date(Math.min(...starts));
   const maxDate = new Date(Math.max(...ends));
-  const totalDays = Math.max(dateDiffDays(minDate, maxDate), 1);
-  const totalCols = totalDays + 1;
+  const workingList = buildWorkingDayList(minDate, maxDate);
+  const totalCols = Math.max(workingList.length, 1);
   let dayCols = '';
-  for(let i=0;i<=totalDays;i++){
-    const d = addDays(minDate,i);
-    dayCols += `<div class="gantt-day-col ${isWeekendDate(d)?'weekend':''}" style="grid-column:${i+1}"></div>`;
-  }
+  workingList.forEach((d,i)=>{
+    const isLast = i === workingList.length - 1;
+    const divider = (d.getDay()===5 && !isLast) ? 'week-end-divider' : '';
+    dayCols += `<div class="gantt-day-col ${divider}" style="grid-column:${i+1}"></div>`;
+  });
   const rows = tasks.map(t=>{
     const s = parseDateStr(t.start);
     const f = parseDateStr(t.finish);
-    const offset = dateDiffDays(minDate, s);
-    const span = Math.max(dateDiffDays(s, f) + 1, 1);
+    const startIdx = workingColIndex(workingList, s, true);
+    const endIdx = Math.max(workingColIndex(workingList, f, false), startIdx);
+    const span = Math.max(endIdx - startIdx + 1, 1);
     const workDays = workingDaysBetween(s, f);
+    const tradeLabel = escapeHtml(t.trade || 'Untitled task');
+    const dateRange = `${formatDateShort(s)} – ${formatDateShort(f)}`;
     return `
       <div class="gantt-row">
-        <div class="gantt-row-label" title="${escapeHtml(t.trade)}">${escapeHtml(t.trade || 'Untitled task')}</div>
+        <div class="gantt-row-label" title="${tradeLabel}">${tradeLabel}</div>
         <div class="gantt-row-track" style="grid-template-columns: repeat(${totalCols}, minmax(22px,1fr));" data-total-cols="${totalCols}">
           ${dayCols}
-          <div class="gantt-bar" style="grid-column: ${offset+1} / span ${span};"
-               title="${escapeHtml(t.trade)}: ${formatDateShort(s)} – ${formatDateShort(f)} (${workDays} working day${workDays===1?'':'s'}, weekends excluded — drag to reschedule)"
+          <div class="gantt-bar" style="grid-column: ${startIdx+1} / span ${span};"
+               data-trade="${tradeLabel}" data-range="${escapeHtml(dateRange)}" data-workdays="${workDays}"
+               onmouseenter="showGanttTooltip(event)" onmousemove="moveGanttTooltip(event)" onmouseleave="hideGanttTooltip()"
                onmousedown="startBarDrag(event, ${t._idx})">${workDays}d</div>
         </div>
       </div>
@@ -1888,10 +1935,38 @@ function renderGanttChart(job){
   }).join('');
   return `
     <div class="gantt-chart">
-      <div class="gantt-scale">${formatDateShort(minDate)} → ${formatDateShort(maxDate)} · ${totalDays} day span · drag a bar to reschedule it</div>
+      <div class="gantt-scale">${formatDateShort(minDate)} → ${formatDateShort(maxDate)} · working days only, weekends excluded · hover a bar for its dates · drag to reschedule</div>
       <div class="gantt-rows">${rows}</div>
     </div>
   `;
+}
+let ganttTooltipEl = null;
+function showGanttTooltip(e){
+  hideGanttTooltip();
+  const bar = e.currentTarget;
+  const el = document.createElement('div');
+  el.className = 'gantt-tooltip';
+  el.innerHTML = `<strong>${bar.dataset.trade}</strong><br>${bar.dataset.range} · ${bar.dataset.workdays} working day${bar.dataset.workdays==='1'?'':'s'}`;
+  document.body.appendChild(el);
+  ganttTooltipEl = el;
+  positionGanttTooltip(e);
+}
+function moveGanttTooltip(e){
+  if(ganttTooltipEl) positionGanttTooltip(e);
+}
+function positionGanttTooltip(e){
+  if(!ganttTooltipEl) return;
+  const pad = 14;
+  let x = e.clientX + pad;
+  let y = e.clientY + pad;
+  const rect = ganttTooltipEl.getBoundingClientRect();
+  if(x + rect.width > window.innerWidth) x = e.clientX - rect.width - pad;
+  if(y + rect.height > window.innerHeight) y = e.clientY - rect.height - pad;
+  ganttTooltipEl.style.left = `${x}px`;
+  ganttTooltipEl.style.top = `${y}px`;
+}
+function hideGanttTooltip(){
+  if(ganttTooltipEl){ ganttTooltipEl.remove(); ganttTooltipEl = null; }
 }
 
 /* Drag a Gantt bar left/right to shift start + finish together (span stays fixed). */
@@ -1899,6 +1974,7 @@ function startBarDrag(e, taskIdx){
   if(e.button !== undefined && e.button !== 0) return;
   e.preventDefault();
   e.stopPropagation();
+  hideGanttTooltip();
   const bar = e.currentTarget;
   const track = bar.parentElement;
   const totalCols = Number(track.dataset.totalCols) || 1;
@@ -1923,8 +1999,8 @@ function startBarDrag(e, taskIdx){
     bar.classList.remove('dragging');
     document.body.classList.remove('gantt-dragging');
     if(deltaDays !== 0){
-      task.start = toIsoLocal(addDays(parseDateStr(task.start), deltaDays));
-      task.finish = toIsoLocal(addDays(parseDateStr(task.finish), deltaDays));
+      task.start = toIsoLocal(addWorkingDays(parseDateStr(task.start), deltaDays));
+      task.finish = toIsoLocal(addWorkingDays(parseDateStr(task.finish), deltaDays));
       scheduleSave();
       renderProjectsBody();
     } else {
