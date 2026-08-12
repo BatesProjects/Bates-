@@ -568,11 +568,17 @@ const DEFAULT_DATA = {
     }
   },
 
+  /* Projects is the single shared "which job am I looking at" selector —
+     Scheduling, Site Time, Handover & Defects, Site Diary and To-Do all read
+     projects.selectedScope instead of keeping their own, so switching tabs
+     never leaves you on a different job than you thought. */
+  projects: {
+    selectedScope: 'general'
+  },
+
   scheduling: {
-    selectedJobIndex: 0,
-    jobs: [
-      {
-        name: 'Client A — Bathroom Renovation',
+    logs: {
+      'job:job-sample-a': {
         tasks: [
           { trade: 'Demolition', start: '', finish: '' },
           { trade: 'Plumbing rough-in', start: '', finish: '' },
@@ -582,18 +588,16 @@ const DEFAULT_DATA = {
           { trade: 'Plumbing fit-off', start: '', finish: '' }
         ]
       }
-    ]
+    }
   },
 
   siteTime: {
-    selectedJobId: null,
     logs: {}
   },
 
   handoverDefects: {
-    selectedJobId: null,
     logs: {}
-    /* logs[jobId] = { warrantyItems: [...], defects: [...] } — created on first
+    /* logs[scope] = { warrantyItems: [...], defects: [...] } — created on first
        use of a job. Uploaded files are NOT stored here (or anywhere in
        localStorage) — only their name/metadata is. The actual bytes live on
        disk in the job files folder you connect (see FILES section below). */
@@ -671,7 +675,6 @@ const DEFAULT_DATA = {
   },
 
   siteDiary: {
-    selectedScope: 'general',
     logs: {
       general: {
         dailyEntries: [
@@ -685,7 +688,6 @@ const DEFAULT_DATA = {
   },
 
   todos: {
-    selectedScope: 'general',
     logs: {
       general: {
         tasks: [ { text: 'Sample task — edit or delete', done: false, due: '', priority: 'Medium' } ]
@@ -720,13 +722,28 @@ function loadState(){
     // object — transform before merging so mergeDeep doesn't mishandle the
     // type change (it only deep-merges object shapes, not array-to-object).
     if(Array.isArray(parsed.todos)){
-      parsed.todos = { selectedScope: 'general', logs: { general: { tasks: parsed.todos } } };
+      parsed.todos = { logs: { general: { tasks: parsed.todos } } };
     }
     const merged = mergeDeep(DEFAULT_DATA, parsed);
     delete merged.director; // retired section — drop any leftover saved data from older versions of this file
     // Active jobs and leads saved before ids existed won't have a stable id yet — Site Time and Site Diary link to them by id, not array position.
     merged.pipeline.activeJobs.forEach(job => { if(!job.id) job.id = uid(); });
     merged.pipeline.leads.forEach(lead => { if(!lead.id) lead.id = uid(); });
+    // Scheduling saved before the shared Projects job selector kept its own
+    // list of freeform-named programmes, not linked to Pipeline by id.
+    // Best-effort match each programme to an active job by name; anything
+    // unmatched keeps its tasks under "general" so nothing is lost.
+    if(Array.isArray(merged.scheduling.jobs)){
+      const oldProgrammes = merged.scheduling.jobs;
+      delete merged.scheduling.jobs;
+      delete merged.scheduling.selectedJobIndex;
+      oldProgrammes.forEach(programme => {
+        const match = merged.pipeline.activeJobs.find(j => j.client && programme.name && programme.name.startsWith(j.client));
+        const scopeKey = match ? `job:${match.id}` : 'general';
+        if(!merged.scheduling.logs[scopeKey]) merged.scheduling.logs[scopeKey] = { tasks: [] };
+        merged.scheduling.logs[scopeKey].tasks.push(...(programme.tasks||[]));
+      });
+    }
     // Site Time logs saved before the Employees/Trades split was a flat array of trade rows — keep that data as the trades half.
     Object.keys(merged.siteTime.logs).forEach(jobId => {
       const entry = merged.siteTime.logs[jobId];
@@ -741,6 +758,12 @@ function loadState(){
       merged.siteDiary.logs.general.lessonsEntries = merged.siteDiary.lessonsEntries;
       delete merged.siteDiary.lessonsEntries;
     }
+    // These sections each kept their own "which job" selector before Projects
+    // unified them into one — drop the leftovers so exports stay tidy.
+    delete merged.siteTime.selectedJobId;
+    delete merged.handoverDefects.selectedJobId;
+    delete merged.siteDiary.selectedScope;
+    delete merged.todos.selectedScope;
     return merged;
   }catch(e){
     console.error('Failed to load saved data, falling back to sample data.', e);
@@ -1015,7 +1038,7 @@ const TABLE_TEMPLATES = {
 };
 function getTemplate(path){
   if(TABLE_TEMPLATES[path]) return TABLE_TEMPLATES[path]();
-  if(/^scheduling\.jobs\.\d+\.tasks$/.test(path)) return { trade:'', start:'', finish:'' };
+  if(/^scheduling\.logs\.[^.]+\.tasks$/.test(path)) return { trade:'', start:'', finish:'' };
   if(/^contacts\.trades\.\d+\.contacts$/.test(path)) return { name:'', company:'', phone:'', email:'', hourlyRate:0, notes:'' };
   if(/^siteTime\.logs\.[^.]+\.employees$/.test(path)) return { name:'', weekEnding:'', hours:0, rate:0, notes:'' };
   if(/^siteTime\.logs\.[^.]+\.trades$/.test(path)) return { trade:'', weekEnding:'', hours:0, notes:'' };
@@ -1189,8 +1212,8 @@ function updateAllComputedSummaries(){
   const net = (Number(cf.currentBankBalance)||0) + (Number(cf.outstandingInvoices)||0) - (Number(cf.upcomingBills)||0);
   setText('cf-net', formatCurrency(net));
 
-  if(state.siteTime.selectedJobId){
-    const log = state.siteTime.logs[state.siteTime.selectedJobId] || { employees: [], trades: [] };
+  if(state.projects.selectedScope && state.projects.selectedScope.startsWith('job:')){
+    const log = state.siteTime.logs[state.projects.selectedScope] || { employees: [], trades: [] };
     const employeeHours = log.employees.reduce((s,r)=>s+(Number(r.hours)||0),0);
     const employeePay = log.employees.reduce((s,r)=>{ const rate=Number(r.rate)||0; return rate>0 ? s+(Number(r.hours)||0)*rate : s; },0);
     const tradeHours = log.trades.reduce((s,r)=>s+(Number(r.hours)||0),0);
@@ -1209,14 +1232,10 @@ const ROUTES = [
   { key:'pipeline', label:'Job Pipeline', icon:'📋', render: renderPipeline },
   { key:'estimating', label:'Estimating & Quoting', icon:'🧮', render: renderEstimating },
   { key:'systems', label:'Systems', icon:'🗂️', render: renderSystems },
-  { key:'scheduling', label:'Scheduling', icon:'📅', render: renderScheduling },
-  { key:'sitetime', label:'Site Time', icon:'⏱️', render: renderSiteTime },
-  { key:'handover', label:'Handover & Defects', icon:'🔑', render: renderHandoverDefects },
+  { key:'projects', label:'Projects', icon:'📁', render: renderProjects },
   { key:'finance', label:'Finance', icon:'💰', render: renderFinance },
   { key:'marketing', label:'Marketing & Growth', icon:'📈', render: renderMarketing },
-  { key:'contacts', label:'Contacts', icon:'📇', render: renderContacts },
-  { key:'sitediary', label:'Site Diary', icon:'📔', render: renderSiteDiary },
-  { key:'todos', label:'To-Do List', icon:'✅', render: renderTodos }
+  { key:'contacts', label:'Contacts', icon:'📇', render: renderContacts }
 ];
 function navigate(key){ location.hash = key === 'home' ? '' : key; }
 function buildSideNav(){
@@ -1260,14 +1279,10 @@ function renderHome(main){
     { key:'pipeline', icon:'📋', title:'Job Pipeline', desc:'Active jobs, pipeline planner, leads & enquiries tracker.', stat: `${jobCount} active job${jobCount===1?'':'s'} · ${leadCount} lead${leadCount===1?'':'s'}` },
     { key:'estimating', icon:'🧮', title:'Estimating & Quoting', desc:'PriceBook reference, workflow checklists, quotes log.', stat: `${state.estimating.quotesLog.length} quote(s) logged` },
     { key:'systems', icon:'🗂️', title:'Systems', desc:'Fillable document templates — fill in, then print or save as PDF.', stat: 'Variation Notice template' },
-    { key:'scheduling', icon:'📅', title:'Scheduling', desc:'Programme / Gantt overview per job.', stat: `${state.scheduling.jobs.length} job programme(s)` },
-    { key:'sitetime', icon:'⏱️', title:'Site Time', desc:'Employee wages and trade hours by week, per active job.', stat: `${totalHoursLogged} hour${totalHoursLogged===1?'':'s'} logged` },
-    { key:'handover', icon:'🔑', title:'Handover & Defects', desc:'Warranty & certificate register plus defects tracking, per job.', stat: `${handoverWarrantyCount} warranty item(s) · ${handoverOpenDefects} open defect(s)` },
+    { key:'projects', icon:'📁', title:'Projects', desc:'Pick a job once — Scheduling, Site Time, Handover & Defects, Site Diary and To-Do all follow it.', stat: `${totalHoursLogged} hr logged · ${handoverWarrantyCount} warranty item(s) · ${handoverOpenDefects} open defect(s) · ${totalDiaryEntries} diary entr${totalDiaryEntries===1?'y':'ies'} · ${openTodos} open task${openTodos===1?'':'s'}` },
     { key:'finance', icon:'💰', title:'Finance', desc:'Overhead audit, cash flow snapshot, job margin & risk, variations.', stat: `${formatCurrency(ovTotal)}/mo overhead · ${varCount} variation(s) pending` },
     { key:'marketing', icon:'📈', title:'Marketing & Growth', desc:'Website/SEO, ad performance, referral tracking.', stat: `${state.marketing.referrals.length} referral source(s)` },
-    { key:'contacts', icon:'📇', title:'Contacts', desc:'Trade contacts by category, plus a supplier directory.', stat: `${tradeContactCount} trade contact(s) · ${state.contacts.suppliers.length} supplier(s)` },
-    { key:'sitediary', icon:'📔', title:'Site Diary', desc:'Daily diary/reminders plus a lessons-learned journal, general or per job.', stat: `${totalDiaryEntries} entr${totalDiaryEntries===1?'y':'ies'}` },
-    { key:'todos', icon:'✅', title:'To-Do List', desc:'General business list, or pick a job to keep its tasks separate.', stat: `${openTodos} open task${openTodos===1?'':'s'}` }
+    { key:'contacts', icon:'📇', title:'Contacts', desc:'Trade contacts by category, plus a supplier directory.', stat: `${tradeContactCount} trade contact(s) · ${state.contacts.suppliers.length} supplier(s)` }
   ];
   main.innerHTML = `
     <div class="home-header">
@@ -1733,68 +1748,107 @@ function clearVariationTemplate(){
 }
 
 /* ---------------------------------------------------------------
-   13. SCHEDULING
+   13. PROJECTS
+   The single shared job selector for the five job-scoped tabs below
+   (Scheduling, Site Time, Handover & Defects, Site Diary, To-Do) —
+   pick a job once here and every tab follows it, so you can't end up
+   looking at Site Time for one job while thinking you're still on the
+   one you had selected in Scheduling.
 --------------------------------------------------------------- */
-function renderScheduling(main){
-  const jobs = state.scheduling.jobs;
-  if(state.scheduling.selectedJobIndex >= jobs.length) state.scheduling.selectedJobIndex = 0;
-  const idx = state.scheduling.selectedJobIndex;
-  const job = jobs[idx];
+let projectsTab = 'scheduling';
+function renderProjects(main){
+  const jobs = state.pipeline.activeJobs;
+  const leads = state.pipeline.leads;
+  let scope = state.projects.selectedScope || 'general';
+  const scopeStillValid = scope === 'general'
+    || (scope.startsWith('job:') && jobs.some(j=>j.id===scope.slice(4)))
+    || (scope.startsWith('lead:') && leads.some(l=>l.id===scope.slice(5)));
+  if(!scopeStillValid) scope = 'general';
+  state.projects.selectedScope = scope;
+
   main.innerHTML = `
     <div class="section-head">
-      <div><h1>Scheduling</h1><p>Programme / Gantt overview per job. Add tasks with a start and finish date to see the bar chart build itself — weekends are shaded and never count as working days.</p></div>
+      <div><h1>Projects</h1><p>Pick a job once — Scheduling, Site Time, Handover & Defects, Site Diary and To-Do all follow the same selection.</p></div>
     </div>
     <div class="panel">
-      <div class="field-row" style="align-items:flex-end;">
-        <div class="field">
-          <label class="field-label">Job programme</label>
-          <select onchange="selectSchedulingJob(this.value)">
-            ${jobs.map((j,i)=>`<option value="${i}" ${i===idx?'selected':''}>${escapeHtml(j.name || 'Untitled job')}</option>`).join('')}
-          </select>
-        </div>
-        <div class="field"><button class="btn btn-sm" onclick="addSchedulingJob()">+ New job programme</button></div>
-        ${jobs.length>1 ? `<div class="field"><button class="btn btn-sm" onclick="deleteSchedulingJob()">Delete this programme</button></div>` : ''}
+      <div class="field" style="max-width:420px;">
+        <label class="field-label">Job</label>
+        <select onchange="selectProjectsScope(this.value)">
+          <option value="general" ${scope==='general'?'selected':''}>General (not job-specific)</option>
+          ${jobs.length ? `<optgroup label="Active Jobs">
+            ${jobs.map(j=>`<option value="job:${j.id}" ${scope==='job:'+j.id?'selected':''}>${escapeHtml(j.client||'Untitled')} — ${escapeHtml(j.address||'')}</option>`).join('')}
+          </optgroup>` : ''}
+          ${leads.length ? `<optgroup label="Pipeline Leads">
+            ${leads.map(l=>`<option value="lead:${l.id}" ${scope==='lead:'+l.id?'selected':''}>${escapeHtml(l.client||'Untitled')} — ${escapeHtml(l.address||'')}</option>`).join('')}
+          </optgroup>` : ''}
+        </select>
       </div>
-      ${job ? `
-        <div class="field" style="margin-top:4px;">
-          <label class="field-label">Programme name</label>
-          <input type="text" data-path="scheduling.jobs.${idx}.name" value="${escapeHtml(job.name)}">
-        </div>
-        <div class="gantt-wrap">${renderGanttChart(job)}</div>
-        <h3 style="margin-top:20px;">Tasks</h3>
-        <p class="panel-desc">Drag the ⠿ handle to reorder tasks — the Gantt above follows the same order. Working Days counts Mon–Fri only, weekends are never counted.</p>
-        ${renderTable(`scheduling.jobs.${idx}.tasks`, [
-          { field:'trade', label:'Trade / Task', type:'text' },
-          { field:'start', label:'Start Date', type:'date' },
-          { field:'finish', label:'Finish Date', type:'date' },
-          { field:'workingDays', label:'Working Days', type:'computed', key:'workingDays', compute: r => {
-              const s = parseDateStr(r.start), f = parseDateStr(r.finish);
-              return (s && f) ? `${workingDaysBetween(s,f)}d` : '—';
-            } }
-        ], { addLabel:'+ Add task', reorderable:true })}
-      ` : `<p class="muted">No job programmes yet — click "New job programme" to start one.</p>`}
+    </div>
+    <div class="subnav">
+      <button class="subnav-btn ${projectsTab==='scheduling'?'active':''}" onclick="setProjectsTab('scheduling')">Scheduling</button>
+      <button class="subnav-btn ${projectsTab==='sitetime'?'active':''}" onclick="setProjectsTab('sitetime')">Site Time</button>
+      <button class="subnav-btn ${projectsTab==='handover'?'active':''}" onclick="setProjectsTab('handover')">Handover & Defects</button>
+      <button class="subnav-btn ${projectsTab==='sitediary'?'active':''}" onclick="setProjectsTab('sitediary')">Site Diary</button>
+      <button class="subnav-btn ${projectsTab==='todos'?'active':''}" onclick="setProjectsTab('todos')">To-Do List</button>
+    </div>
+    <div id="projects-body"></div>
+  `;
+  renderProjectsBody();
+}
+function selectProjectsScope(scope){
+  state.projects.selectedScope = scope;
+  scheduleSave();
+  renderProjects(document.getElementById('main'));
+}
+function setProjectsTab(tab){ projectsTab = tab; renderProjects(document.getElementById('main')); }
+function renderProjectsBody(){
+  const body = document.getElementById('projects-body');
+  if(!body) return;
+  if(projectsTab === 'scheduling'){
+    body.innerHTML = renderSchedulingTab();
+  } else if(projectsTab === 'sitetime'){
+    body.innerHTML = renderSiteTimeTab();
+  } else if(projectsTab === 'handover'){
+    body.innerHTML = renderHandoverTab();
+    const scope = state.projects.selectedScope;
+    if(scope !== 'general' && !scope.startsWith('lead:')) renderHandoverBody();
+  } else if(projectsTab === 'sitediary'){
+    body.innerHTML = renderSiteDiaryTab();
+    renderSiteDiaryBody();
+  } else if(projectsTab === 'todos'){
+    body.innerHTML = renderTodoTab();
+  }
+}
+
+/* ---------------------------------------------------------------
+   14. SCHEDULING (a Projects tab)
+--------------------------------------------------------------- */
+function ensureSchedulingLog(scope){
+  if(!state.scheduling.logs[scope]) state.scheduling.logs[scope] = { tasks: [] };
+}
+function renderSchedulingTab(){
+  const scope = state.projects.selectedScope;
+  if(scope === 'general' || scope.startsWith('lead:')){
+    return `<div class="panel"><p class="muted">Select an active job above to build its programme — Scheduling only applies once a job is actually underway.</p></div>`;
+  }
+  ensureSchedulingLog(scope);
+  const log = state.scheduling.logs[scope];
+  return `
+    <div class="panel">
+      <p class="panel-desc">Add tasks with a start and finish date to see the bar chart build itself — weekends are shaded and never count as working days. Drag the ⠿ handle to reorder tasks — the Gantt above follows the same order.</p>
+      <div class="gantt-wrap">${renderGanttChart(log)}</div>
+      <h3 style="margin-top:20px;">Tasks</h3>
+      ${renderTable(`scheduling.logs.${scope}.tasks`, [
+        { field:'trade', label:'Trade / Task', type:'text' },
+        { field:'start', label:'Start Date', type:'date' },
+        { field:'finish', label:'Finish Date', type:'date' },
+        { field:'workingDays', label:'Working Days', type:'computed', key:'workingDays', compute: r => {
+            const s = parseDateStr(r.start), f = parseDateStr(r.finish);
+            return (s && f) ? `${workingDaysBetween(s,f)}d` : '—';
+          } }
+      ], { addLabel:'+ Add task', reorderable:true })}
     </div>
   `;
-}
-function selectSchedulingJob(val){
-  state.scheduling.selectedJobIndex = Number(val);
-  scheduleSave();
-  renderScheduling(document.getElementById('main'));
-}
-function addSchedulingJob(){
-  const name = prompt('Job name (e.g. "123 Smith St — Deck"):');
-  if(!name) return;
-  state.scheduling.jobs.push({ name, tasks: [] });
-  state.scheduling.selectedJobIndex = state.scheduling.jobs.length - 1;
-  scheduleSave();
-  renderScheduling(document.getElementById('main'));
-}
-function deleteSchedulingJob(){
-  if(!confirm('Delete this job programme?')) return;
-  state.scheduling.jobs.splice(state.scheduling.selectedJobIndex, 1);
-  state.scheduling.selectedJobIndex = 0;
-  scheduleSave();
-  renderScheduling(document.getElementById('main'));
 }
 function renderGanttChart(job){
   const tasks = (job.tasks||[]).map((t,i)=>({...t, _idx:i}))
@@ -1849,8 +1903,8 @@ function startBarDrag(e, taskIdx){
   const track = bar.parentElement;
   const totalCols = Number(track.dataset.totalCols) || 1;
   const dayWidth = track.getBoundingClientRect().width / totalCols;
-  const jobIdx = state.scheduling.selectedJobIndex;
-  const task = state.scheduling.jobs[jobIdx].tasks[taskIdx];
+  const scope = state.projects.selectedScope;
+  const task = state.scheduling.logs[scope].tasks[taskIdx];
   const originalLabel = bar.textContent;
   const startX = e.clientX;
   let deltaDays = 0;
@@ -1872,7 +1926,7 @@ function startBarDrag(e, taskIdx){
       task.start = toIsoLocal(addDays(parseDateStr(task.start), deltaDays));
       task.finish = toIsoLocal(addDays(parseDateStr(task.finish), deltaDays));
       scheduleSave();
-      renderScheduling(document.getElementById('main'));
+      renderProjectsBody();
     } else {
       bar.style.transform = '';
       bar.textContent = originalLabel;
@@ -1883,88 +1937,61 @@ function startBarDrag(e, taskIdx){
 }
 
 /* ---------------------------------------------------------------
-   14. SITE TIME
-   Job selector here reads directly from pipeline.activeJobs (by id),
-   so it always matches Job Pipeline's Active Jobs — there's no
-   separate job list to keep in sync. Trade options read from
-   Contacts > Trades categories for the same reason. Each job's log
-   is sectioned into your own Employees (wages, so you know what to
-   pay each week) and Trades On Site (subcontractor hours).
+   15. SITE TIME (a Projects tab)
+   Trade options read from Contacts > Trades categories. Each job's
+   log is sectioned into your own Employees (wages, so you know what
+   to pay each week) and Trades On Site (subcontractor hours).
 --------------------------------------------------------------- */
 function ensureSiteTimeLog(jobId){
   if(!state.siteTime.logs[jobId]) state.siteTime.logs[jobId] = { employees: [], trades: [] };
 }
-function renderSiteTime(main){
-  const jobs = state.pipeline.activeJobs;
-  if(!state.siteTime.selectedJobId || !jobs.find(j=>j.id===state.siteTime.selectedJobId)){
-    state.siteTime.selectedJobId = jobs.length ? jobs[0].id : null;
+function renderSiteTimeTab(){
+  const scope = state.projects.selectedScope;
+  if(scope === 'general' || scope.startsWith('lead:')){
+    return `<div class="panel"><p class="muted">Select an active job above to log site time.</p></div>`;
   }
-  const jobId = state.siteTime.selectedJobId;
-  if(jobId) ensureSiteTimeLog(jobId);
-  const job = jobs.find(j=>j.id===jobId);
+  ensureSiteTimeLog(scope);
   const tradeOptions = state.contacts.trades.map(t=>t.category).filter(Boolean);
-  const log = jobId ? state.siteTime.logs[jobId] : { employees: [], trades: [] };
+  const log = state.siteTime.logs[scope];
   const employeeHours = log.employees.reduce((s,r)=>s+(Number(r.hours)||0),0);
   const employeePay = log.employees.reduce((s,r)=>{ const rate=Number(r.rate)||0; return rate>0 ? s+(Number(r.hours)||0)*rate : s; },0);
   const tradeHours = log.trades.reduce((s,r)=>s+(Number(r.hours)||0),0);
-
-  main.innerHTML = `
-    <div class="section-head">
-      <div><h1>Site Time</h1><p>Employee and trade hours by week, per active job. The job list here always matches Job Pipeline → Active Jobs.</p></div>
+  return `
+    <div class="panel">
+      <h3>Bates Projects Employees</h3>
+      <p class="panel-desc">Your own employees' hours and pay on this job, by week — so you know what you owe each week.</p>
+      <div class="stat-row">
+        <div class="stat-card"><div class="stat-label">Employee hours</div><div class="stat-value" id="sitetime-employee-hours">${employeeHours}</div></div>
+        <div class="stat-card"><div class="stat-label">Pay owed (where rate is set)</div><div class="stat-value" id="sitetime-employee-pay">${formatCurrency(employeePay)}</div></div>
+      </div>
+      ${renderTable(`siteTime.logs.${scope}.employees`, [
+        { field:'name', label:'Employee', type:'text' },
+        { field:'weekEnding', label:'Week Ending', type:'date' },
+        { field:'hours', label:'Hours', type:'number' },
+        { field:'rate', label:'Rate ($/hr)', type:'number' },
+        { field:'pay', label:'Pay', type:'computed', key:'pay', compute: r => { const rate=Number(r.rate)||0; return rate>0 ? formatCurrency((Number(r.hours)||0)*rate) : '—'; } },
+        { field:'notes', label:'Notes', type:'textarea' }
+      ], { addLabel:'+ Add employee hours' })}
     </div>
     <div class="panel">
-      ${jobs.length === 0 ? `<p class="muted">No active jobs yet — add one in Job Pipeline → Active Jobs first, then it'll show up here.</p>` : `
-        <div class="field" style="max-width:380px;">
-          <label class="field-label">Active job</label>
-          <select onchange="selectSiteTimeJob(this.value)">
-            ${jobs.map(j=>`<option value="${j.id}" ${j.id===jobId?'selected':''}>${escapeHtml(j.client||'Untitled')} — ${escapeHtml(j.address||'')}</option>`).join('')}
-          </select>
-        </div>
-      `}
+      <h3>Trades On Site</h3>
+      <p class="panel-desc">Subcontractor / trade hours on site this job, by week.</p>
+      <div class="stat-row">
+        <div class="stat-card"><div class="stat-label">Trade hours</div><div class="stat-value" id="sitetime-trade-hours">${tradeHours}</div></div>
+      </div>
+      ${tradeOptions.length === 0 ? `<p class="muted">No trade categories set up yet — add some in Contacts → Trades to populate the dropdown here.</p>` : ''}
+      ${renderTable(`siteTime.logs.${scope}.trades`, [
+        { field:'trade', label:'Trade', type: tradeOptions.length ? 'select' : 'text', options: tradeOptions },
+        { field:'weekEnding', label:'Week Ending', type:'date' },
+        { field:'hours', label:'Hours', type:'number' },
+        { field:'notes', label:'Notes', type:'textarea' }
+      ], { addLabel:'+ Add trade hours' })}
     </div>
-    ${job ? `
-      <div class="panel">
-        <h3>Bates Projects Employees</h3>
-        <p class="panel-desc">Your own employees' hours and pay on this job, by week — so you know what you owe each week.</p>
-        <div class="stat-row">
-          <div class="stat-card"><div class="stat-label">Employee hours</div><div class="stat-value" id="sitetime-employee-hours">${employeeHours}</div></div>
-          <div class="stat-card"><div class="stat-label">Pay owed (where rate is set)</div><div class="stat-value" id="sitetime-employee-pay">${formatCurrency(employeePay)}</div></div>
-        </div>
-        ${renderTable(`siteTime.logs.${jobId}.employees`, [
-          { field:'name', label:'Employee', type:'text' },
-          { field:'weekEnding', label:'Week Ending', type:'date' },
-          { field:'hours', label:'Hours', type:'number' },
-          { field:'rate', label:'Rate ($/hr)', type:'number' },
-          { field:'pay', label:'Pay', type:'computed', key:'pay', compute: r => { const rate=Number(r.rate)||0; return rate>0 ? formatCurrency((Number(r.hours)||0)*rate) : '—'; } },
-          { field:'notes', label:'Notes', type:'textarea' }
-        ], { addLabel:'+ Add employee hours' })}
-      </div>
-      <div class="panel">
-        <h3>Trades On Site</h3>
-        <p class="panel-desc">Subcontractor / trade hours on site this job, by week.</p>
-        <div class="stat-row">
-          <div class="stat-card"><div class="stat-label">Trade hours</div><div class="stat-value" id="sitetime-trade-hours">${tradeHours}</div></div>
-        </div>
-        ${tradeOptions.length === 0 ? `<p class="muted">No trade categories set up yet — add some in Contacts → Trades to populate the dropdown here.</p>` : ''}
-        ${renderTable(`siteTime.logs.${jobId}.trades`, [
-          { field:'trade', label:'Trade', type: tradeOptions.length ? 'select' : 'text', options: tradeOptions },
-          { field:'weekEnding', label:'Week Ending', type:'date' },
-          { field:'hours', label:'Hours', type:'number' },
-          { field:'notes', label:'Notes', type:'textarea' }
-        ], { addLabel:'+ Add trade hours' })}
-      </div>
-    ` : ''}
   `;
-}
-function selectSiteTimeJob(jobId){
-  state.siteTime.selectedJobId = jobId;
-  ensureSiteTimeLog(jobId);
-  scheduleSave();
-  renderSiteTime(document.getElementById('main'));
 }
 
 /* ---------------------------------------------------------------
-   15. HANDOVER & DEFECTS
+   16. HANDOVER & DEFECTS
    Job-scoped to Active Jobs only (handover is a late-stage process,
    so Pipeline Leads aren't offered here, unlike Site Diary/To-Do).
    Uploaded files are NEVER stored in state/localStorage — only their
@@ -2024,7 +2051,7 @@ async function initJobFilesFolder(){
   }catch(e){
     jobFilesStatus = 'disconnected';
   }
-  if(location.hash.replace('#','') === 'handover') renderHandoverDefects(document.getElementById('main'));
+  if(location.hash.replace('#','') === 'projects') renderProjects(document.getElementById('main'));
 }
 async function connectJobFilesFolder(){
   try{
@@ -2035,7 +2062,7 @@ async function connectJobFilesFolder(){
     jobFilesRootHandle = handle;
     jobFilesPendingHandle = null;
     jobFilesStatus = 'connected';
-    renderHandoverDefects(document.getElementById('main'));
+    renderProjects(document.getElementById('main'));
     try{ await hdIdbSet('rootDir', handle); }
     catch(idbErr){ console.error('Could not remember this folder for next session:', idbErr); }
   }catch(e){
@@ -2050,7 +2077,7 @@ async function reconnectJobFilesFolder(){
       jobFilesRootHandle = jobFilesPendingHandle;
       jobFilesPendingHandle = null;
       jobFilesStatus = 'connected';
-      renderHandoverDefects(document.getElementById('main'));
+      renderProjects(document.getElementById('main'));
     }
   }catch(e){ /* user dismissed the permission prompt */ }
 }
@@ -2101,43 +2128,26 @@ function ensureHandoverLog(jobId){
   if(!state.handoverDefects.logs[jobId]) state.handoverDefects.logs[jobId] = { warrantyItems: [], defects: [] };
 }
 
-/* --- routing / render --- */
+/* --- routing / render (a Projects tab) --- */
 let handoverTab = 'warranty';
 let warrantySort = 'category'; // 'category' | 'expiry'
-function renderHandoverDefects(main){
-  const jobs = state.pipeline.activeJobs;
-  if(!state.handoverDefects.selectedJobId || !jobs.some(j=>j.id===state.handoverDefects.selectedJobId)){
-    state.handoverDefects.selectedJobId = jobs.length ? jobs[0].id : null;
+function renderHandoverTab(){
+  const scope = state.projects.selectedScope;
+  let html = renderJobFilesConnectionPanel();
+  html += `<div id="handover-pack-print-root" style="display:none;"></div><div id="defects-list-print-root" style="display:none;"></div>`;
+  if(scope === 'general' || scope.startsWith('lead:')){
+    html += `<div class="panel"><p class="muted">Select an active job above for its handover & defects register.</p></div>`;
+    return html;
   }
-  const jobId = state.handoverDefects.selectedJobId;
-  if(jobId) ensureHandoverLog(jobId);
-
-  main.innerHTML = `
-    <div class="section-head">
-      <div><h1>Handover & Defects</h1><p>Warranty & certificate register and defects tracking, per job — the job list matches Job Pipeline → Active Jobs.</p></div>
+  ensureHandoverLog(scope);
+  html += `
+    <div class="subnav">
+      <button class="subnav-btn ${handoverTab==='warranty'?'active':''}" onclick="setHandoverTab('warranty')">Warranty & Certificate Register</button>
+      <button class="subnav-btn ${handoverTab==='defects'?'active':''}" onclick="setHandoverTab('defects')">Defects Tracking</button>
     </div>
-    ${renderJobFilesConnectionPanel()}
-    <div class="panel">
-      ${jobs.length === 0 ? `<p class="muted">No active jobs yet — add one in Job Pipeline → Active Jobs first, then it'll show up here.</p>` : `
-        <div class="field" style="max-width:420px;">
-          <label class="field-label">Job</label>
-          <select onchange="selectHandoverJob(this.value)">
-            ${jobs.map(j=>`<option value="${j.id}" ${j.id===jobId?'selected':''}>${escapeHtml(j.client||'Untitled')} — ${escapeHtml(j.address||'')}</option>`).join('')}
-          </select>
-        </div>
-      `}
-    </div>
-    <div id="handover-pack-print-root" style="display:none;"></div>
-    <div id="defects-list-print-root" style="display:none;"></div>
-    ${jobId ? `
-      <div class="subnav">
-        <button class="subnav-btn ${handoverTab==='warranty'?'active':''}" onclick="setHandoverTab('warranty')">Warranty & Certificate Register</button>
-        <button class="subnav-btn ${handoverTab==='defects'?'active':''}" onclick="setHandoverTab('defects')">Defects Tracking</button>
-      </div>
-      <div id="handover-body"></div>
-    ` : ''}
+    <div id="handover-body"></div>
   `;
-  if(jobId) renderHandoverBody();
+  return html;
 }
 function renderJobFilesConnectionPanel(){
   if(jobFilesStatus === 'unsupported'){
@@ -2165,12 +2175,6 @@ function renderJobFilesConnectionPanel(){
   </div>`;
 }
 function setHandoverTab(tab){ handoverTab = tab; renderHandoverBody(); }
-function selectHandoverJob(jobId){
-  state.handoverDefects.selectedJobId = jobId;
-  ensureHandoverLog(jobId);
-  scheduleSave();
-  renderHandoverDefects(document.getElementById('main'));
-}
 function renderHandoverBody(){
   const body = document.getElementById('handover-body');
   if(!body) return;
@@ -2179,7 +2183,7 @@ function renderHandoverBody(){
 
 /* --- Warranty & Certificate Register --- */
 function renderWarrantyRegister(){
-  const jobId = state.handoverDefects.selectedJobId;
+  const jobId = state.projects.selectedScope;
   const items = state.handoverDefects.logs[jobId].warrantyItems;
   const complete = items.filter(i=>i.files.length>0).length;
   const tradeOptions = state.contacts.trades.map(t=>t.category).filter(Boolean);
@@ -2241,7 +2245,7 @@ function renderWarrantyRow(jobId, item, idx, tradeOptions){
 }
 function setWarrantySort(mode){
   warrantySort = mode;
-  const jobId = state.handoverDefects.selectedJobId;
+  const jobId = state.projects.selectedScope;
   const items = state.handoverDefects.logs[jobId].warrantyItems;
   items.sort((a,b)=>{
     if(mode==='expiry'){
@@ -2281,7 +2285,7 @@ async function removeWarrantyFile(jobId, itemIdx, fileIdx){
 
 /* --- Defects Tracking --- */
 function renderDefectsTracking(){
-  const jobId = state.handoverDefects.selectedJobId;
+  const jobId = state.projects.selectedScope;
   const defects = state.handoverDefects.logs[jobId].defects;
   const tradeOptions = state.contacts.trades.map(t=>t.category).filter(Boolean);
   const openCount = defects.filter(d=>d.status!=='Closed').length;
@@ -2460,18 +2464,18 @@ function buildDefectsListHtml(jobId){
   `;
 }
 function exportHandoverPack(){
-  const jobId = state.handoverDefects.selectedJobId;
+  const jobId = state.projects.selectedScope;
   document.getElementById('handover-pack-print-root').innerHTML = buildHandoverPackHtml(jobId);
   printWithMode('printing-handover-pack');
 }
 function exportDefectsList(){
-  const jobId = state.handoverDefects.selectedJobId;
+  const jobId = state.projects.selectedScope;
   document.getElementById('defects-list-print-root').innerHTML = buildDefectsListHtml(jobId);
   printWithMode('printing-defects-list');
 }
 
 /* ---------------------------------------------------------------
-   16. FINANCE
+   17. FINANCE
 --------------------------------------------------------------- */
 let financeTab = 'overheads';
 function renderFinance(main){
@@ -2583,7 +2587,7 @@ function renderFinanceBody(){
 }
 
 /* ---------------------------------------------------------------
-   17. MARKETING & GROWTH
+   18. MARKETING & GROWTH
 --------------------------------------------------------------- */
 function renderMarketing(main){
   const w = state.marketing.website;
@@ -2628,7 +2632,7 @@ function renderMarketing(main){
 }
 
 /* ---------------------------------------------------------------
-   18. CONTACTS
+   19. CONTACTS
 --------------------------------------------------------------- */
 let contactsTab = 'trades';
 function renderContacts(main){
@@ -2720,10 +2724,9 @@ function deleteTradeCategory(){
 }
 
 /* ---------------------------------------------------------------
-   19. SITE DIARY
-   Optional job scope, same id-based linking as Site Time: pick
-   "General", an Active Job, or a Pipeline Lead, and entries are kept
-   separate per scope so you can pull up just one job's notes later.
+   20. SITE DIARY (a Projects tab)
+   Supports all three scopes — General, Active Job, Pipeline Lead —
+   unlike Scheduling/Site Time/Handover which need an active job.
 --------------------------------------------------------------- */
 let siteDiaryTab = 'daily';
 function ensureSiteDiaryLog(scope){
@@ -2741,53 +2744,22 @@ function siteDiaryScopeLabel(scope){
   }
   return 'General';
 }
-function renderSiteDiary(main){
-  const activeJobs = state.pipeline.activeJobs;
-  const leads = state.pipeline.leads;
-  let scope = state.siteDiary.selectedScope || 'general';
-  const scopeStillValid = scope === 'general'
-    || (scope.startsWith('job:') && activeJobs.some(j=>j.id===scope.slice(4)))
-    || (scope.startsWith('lead:') && leads.some(l=>l.id===scope.slice(5)));
-  if(!scopeStillValid) scope = 'general';
-  state.siteDiary.selectedScope = scope;
+function renderSiteDiaryTab(){
+  const scope = state.projects.selectedScope;
   ensureSiteDiaryLog(scope);
-
-  main.innerHTML = `
-    <div class="section-head">
-      <div><h1>Site Diary</h1><p>A quick daily habit — what happened, what's coming up, and the lessons worth remembering. Not a formal record, just reminders to yourself.</p></div>
-    </div>
-    <div class="panel">
-      <div class="field" style="max-width:420px;">
-        <label class="field-label">Job (optional)</label>
-        <select onchange="selectSiteDiaryScope(this.value)">
-          <option value="general" ${scope==='general'?'selected':''}>General (not job-specific)</option>
-          ${activeJobs.length ? `<optgroup label="Active Jobs">
-            ${activeJobs.map(j=>`<option value="job:${j.id}" ${scope==='job:'+j.id?'selected':''}>${escapeHtml(j.client||'Untitled')} — ${escapeHtml(j.address||'')}</option>`).join('')}
-          </optgroup>` : ''}
-          ${leads.length ? `<optgroup label="Pipeline Leads">
-            ${leads.map(l=>`<option value="lead:${l.id}" ${scope==='lead:'+l.id?'selected':''}>${escapeHtml(l.client||'Untitled')} — ${escapeHtml(l.address||'')}</option>`).join('')}
-          </optgroup>` : ''}
-        </select>
-      </div>
-    </div>
+  return `
     <div class="subnav">
       <button class="subnav-btn ${siteDiaryTab==='daily'?'active':''}" onclick="setSiteDiaryTab('daily')">Daily Diary</button>
       <button class="subnav-btn ${siteDiaryTab==='lessons'?'active':''}" onclick="setSiteDiaryTab('lessons')">Lessons Learned</button>
     </div>
     <div id="sitediary-body"></div>
   `;
-  renderSiteDiaryBody();
 }
-function selectSiteDiaryScope(scope){
-  state.siteDiary.selectedScope = scope;
-  ensureSiteDiaryLog(scope);
-  scheduleSave();
-  renderSiteDiary(document.getElementById('main'));
-}
-function setSiteDiaryTab(tab){ siteDiaryTab = tab; renderSiteDiary(document.getElementById('main')); }
+function setSiteDiaryTab(tab){ siteDiaryTab = tab; renderProjectsBody(); }
 function renderSiteDiaryBody(){
   const body = document.getElementById('sitediary-body');
-  const scope = state.siteDiary.selectedScope;
+  if(!body) return;
+  const scope = state.projects.selectedScope;
   const scopeLabel = escapeHtml(siteDiaryScopeLabel(scope));
   const basePath = `siteDiary.logs.${scope}`;
   if(siteDiaryTab === 'daily'){
@@ -2810,10 +2782,9 @@ function renderSiteDiaryBody(){
 }
 
 /* ---------------------------------------------------------------
-   20. TO-DO LIST
-   Same optional job scope as Site Diary: General Bates Projects
-   To-Do List by default, or pick an Active Job / Pipeline Lead to
-   keep that job's tasks separate.
+   21. TO-DO LIST (a Projects tab)
+   Same scope options as Site Diary: General, Active Job, or
+   Pipeline Lead — tasks are kept separate per scope.
 --------------------------------------------------------------- */
 let todoFilter = 'open';
 function ensureTodoLog(scope){
@@ -2831,37 +2802,12 @@ function todoScopeLabel(scope){
   }
   return 'General Bates Projects To-Do List';
 }
-function renderTodos(main){
-  const activeJobs = state.pipeline.activeJobs;
-  const leads = state.pipeline.leads;
-  let scope = state.todos.selectedScope || 'general';
-  const scopeStillValid = scope === 'general'
-    || (scope.startsWith('job:') && activeJobs.some(j=>j.id===scope.slice(4)))
-    || (scope.startsWith('lead:') && leads.some(l=>l.id===scope.slice(5)));
-  if(!scopeStillValid) scope = 'general';
-  state.todos.selectedScope = scope;
+function renderTodoTab(){
+  const scope = state.projects.selectedScope;
   ensureTodoLog(scope);
   const openCount = state.todos.logs[scope].tasks.filter(t=>!t.done).length;
   const scopeLabel = escapeHtml(todoScopeLabel(scope));
-
-  main.innerHTML = `
-    <div class="section-head">
-      <div><h1>To-Do List</h1><p>General for the business overall, or pick a job to keep its tasks separate.</p></div>
-    </div>
-    <div class="panel">
-      <div class="field" style="max-width:420px;">
-        <label class="field-label">List</label>
-        <select onchange="selectTodoScope(this.value)">
-          <option value="general" ${scope==='general'?'selected':''}>General Bates Projects To-Do List</option>
-          ${activeJobs.length ? `<optgroup label="Active Jobs">
-            ${activeJobs.map(j=>`<option value="job:${j.id}" ${scope==='job:'+j.id?'selected':''}>${escapeHtml(j.client||'Untitled')} — ${escapeHtml(j.address||'')}</option>`).join('')}
-          </optgroup>` : ''}
-          ${leads.length ? `<optgroup label="Pipeline Leads">
-            ${leads.map(l=>`<option value="lead:${l.id}" ${scope==='lead:'+l.id?'selected':''}>${escapeHtml(l.client||'Untitled')} — ${escapeHtml(l.address||'')}</option>`).join('')}
-          </optgroup>` : ''}
-        </select>
-      </div>
-    </div>
+  return `
     <div class="panel">
       <h3>${scopeLabel}</h3>
       <div class="todo-add-row">
@@ -2881,14 +2827,8 @@ function renderTodos(main){
     <div class="panel" id="todo-list-panel">${renderTodoRows()}</div>
   `;
 }
-function selectTodoScope(scope){
-  state.todos.selectedScope = scope;
-  ensureTodoLog(scope);
-  scheduleSave();
-  renderTodos(document.getElementById('main'));
-}
 function renderTodoRows(){
-  const scope = state.todos.selectedScope;
+  const scope = state.projects.selectedScope;
   const tasks = state.todos.logs[scope].tasks;
   const indexed = tasks.map((t,i)=>({t,i}));
   const filtered = todoFilter === 'all' ? indexed : indexed.filter(x => todoFilter === 'done' ? x.t.done : !x.t.done);
@@ -2909,7 +2849,7 @@ function addTodo(){
   const textEl = document.getElementById('todo-new-text');
   const text = textEl.value.trim();
   if(!text){ textEl.focus(); return; }
-  const scope = state.todos.selectedScope;
+  const scope = state.projects.selectedScope;
   state.todos.logs[scope].tasks.push({
     text,
     done: false,
@@ -2917,18 +2857,18 @@ function addTodo(){
     priority: document.getElementById('todo-new-priority').value
   });
   scheduleSave();
-  renderTodos(document.getElementById('main'));
+  renderProjectsBody();
 }
 function toggleTodoDone(i){
-  const scope = state.todos.selectedScope;
+  const scope = state.projects.selectedScope;
   state.todos.logs[scope].tasks[i].done = !state.todos.logs[scope].tasks[i].done;
   scheduleSave();
-  renderTodos(document.getElementById('main'));
+  renderProjectsBody();
 }
-function setTodoFilter(f){ todoFilter = f; renderTodos(document.getElementById('main')); }
+function setTodoFilter(f){ todoFilter = f; renderProjectsBody(); }
 
 /* ---------------------------------------------------------------
-   21. INIT
+   22. INIT
 --------------------------------------------------------------- */
 buildSideNav();
 renderRoute();
