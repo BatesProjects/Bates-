@@ -401,6 +401,11 @@
   .hd-ok-badge{ color: var(--success); font-weight:700; text-transform:none; letter-spacing:0; margin-left:6px; }
   .pf-file-link{ background:transparent; border:none; color: var(--accent); font-weight:600; font-size:12.5px; cursor:pointer; padding:2px 0; text-align:left; }
   .pf-file-link:hover{ text-decoration: underline; }
+  .var-head-meta{ display:flex; align-items:center; gap:10px; white-space:nowrap; }
+  .var-cost{ font-weight:800; font-size:14px; }
+  .var-cost.var-cost-up{ color: var(--warning); }
+  .var-cost.var-cost-down{ color: var(--success); }
+  .var-signoff-row{ display:flex; align-items:flex-end; gap:18px; flex-wrap:wrap; padding-top:4px; border-top:1px solid var(--border-soft); }
   .hd-connect-banner{ display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
 
   /* Printed handover pack / defects list documents */
@@ -594,8 +599,8 @@ const DEFAULT_DATA = {
   },
 
   /* Projects is the single shared "which job am I looking at" selector —
-     Scheduling, Site Time, Files, Site Diary, To-Do and Handover & Defects all
-     read projects.selectedScope instead of keeping their own, so switching tabs
+     Scheduling, Site Time, Files, Site Diary, To-Do, Handover & Defects and
+     Variations all read projects.selectedScope instead of keeping their own, so switching tabs
      never leaves you on a different job than you thought. */
   projects: {
     selectedScope: 'general'
@@ -626,6 +631,14 @@ const DEFAULT_DATA = {
        Uploaded files are NOT stored here (or anywhere in localStorage) — only
        their name/metadata is. The actual bytes live on disk in the job files
        folder you connect (shared with Handover & Defects — see FILES section). */
+  },
+
+  variations: {
+    logs: {}
+    /* logs[scope] = { items: [...] } — created on first use of a job/lead.
+       A running log of changes from the drawings, separate from Finance's
+       job-costing Variations tab, so a whole job's worth of changes can be
+       reviewed and signed off by the client in one sitting. */
   },
 
   handoverDefects: {
@@ -1092,6 +1105,7 @@ function getTemplate(path){
   if(/^contacts\.trades\.\d+\.contacts$/.test(path)) return { name:'', company:'', phone:'', email:'', hourlyRate:0, notes:'' };
   if(/^siteTime\.logs\.[^.]+\.employees$/.test(path)) return { name:'', weekEnding:'', hours:0, rate:0, paid:false, notes:'' };
   if(/^siteTime\.logs\.[^.]+\.trades$/.test(path)) return { trade:'', weekEnding:'', hours:0, rate:0, paid:false, notes:'' };
+  if(/^variations\.logs\.[^.]+\.items$/.test(path)) return { date: todayStr(), description:'', reference:'', costImpact:0, trades:'', signedOff:false, signedOffDate:'', notes:'' };
   if(/^siteDiary\.logs\.[^.]+\.(dailyEntries|lessonsEntries)$/.test(path)) return { date: todayStr(), text:'' };
   if(/^handoverDefects\.logs\.[^.]+\.warrantyItems$/.test(path)) return { itemName:'', category:'Product Warranty', supplier:'', tradeCategory:'', certDate:'', warrantyExpiry:'', notes:'', files:[] };
   if(/^handoverDefects\.logs\.[^.]+\.defects$/.test(path)) return { description:'', location:'', dateIdentified:'', identifiedBy:'Client', status:'Open', tradeCategory:'', stage:'Practical Completion', dateClosed:'', notes:'', photos:[] };
@@ -1137,6 +1151,9 @@ function getComputedColumns(tablePath){
   if(COMPUTED_COLUMNS[tablePath]) return COMPUTED_COLUMNS[tablePath];
   if(/^siteTime\.logs\.[^.]+\.(employees|trades)$/.test(tablePath)){
     return [{ key:'owed', compute: r => { const rate = Number(r.rate)||0; return rate>0 ? formatCurrency((Number(r.hours)||0)*rate) : '—'; } }];
+  }
+  if(/^variations\.logs\.[^.]+\.items$/.test(tablePath)){
+    return [{ key:'costImpact', compute: r => formatSignedCurrency(r.costImpact) }];
   }
   return null;
 }
@@ -1267,6 +1284,15 @@ function updateAllComputedSummaries(){
     updateSiteTimeSummaries('employee', log.employees);
     updateSiteTimeSummaries('trade', log.trades);
   }
+  const varScope = state.projects.selectedScope;
+  if(varScope && varScope !== 'general' && state.variations.logs[varScope]){
+    const items = state.variations.logs[varScope].items;
+    const netImpact = items.reduce((s,v)=>s+(Number(v.costImpact)||0),0);
+    const signedOffCount = items.filter(v=>v.signedOff).length;
+    setText('var-stat-count', items.length);
+    setText('var-stat-net', formatSignedCurrency(netImpact));
+    setText('var-stat-signedoff', `${signedOffCount} / ${items.length}`);
+  }
 }
 /* Live-refreshes the Site Time stat cards + per-week Amount Owed spans as hours/rate
    are typed, without a full re-render (which would drop focus mid-keystroke). Weeks
@@ -1344,7 +1370,7 @@ function renderHome(main){
     { key:'pipeline', icon:'📋', title:'Job Pipeline', desc:'Active jobs, pipeline planner, leads & enquiries tracker.', stat: `${jobCount} active job${jobCount===1?'':'s'} · ${leadCount} lead${leadCount===1?'':'s'}` },
     { key:'estimating', icon:'🧮', title:'Estimating & Quoting', desc:'PriceBook reference, workflow checklists, quotes log.', stat: `${state.estimating.quotesLog.length} quote(s) logged` },
     { key:'systems', icon:'🗂️', title:'Systems', desc:'Fillable document templates — fill in, then print or save as PDF.', stat: 'Variation Notice template' },
-    { key:'projects', icon:'📁', title:'Projects', desc:'Pick a job once — Scheduling, Site Time, Files, Site Diary, To-Do and Handover & Defects all follow it.', stat: `${totalHoursLogged} hr logged · ${handoverWarrantyCount} warranty item(s) · ${handoverOpenDefects} open defect(s) · ${totalDiaryEntries} diary entr${totalDiaryEntries===1?'y':'ies'} · ${openTodos} open task${openTodos===1?'':'s'}` },
+    { key:'projects', icon:'📁', title:'Projects', desc:'Pick a job once — Scheduling, Site Time, Files, Site Diary, To-Do, Handover & Defects and Variations all follow it.', stat: `${totalHoursLogged} hr logged · ${handoverWarrantyCount} warranty item(s) · ${handoverOpenDefects} open defect(s) · ${totalDiaryEntries} diary entr${totalDiaryEntries===1?'y':'ies'} · ${openTodos} open task${openTodos===1?'':'s'}` },
     { key:'finance', icon:'💰', title:'Finance', desc:'Overhead audit, cash flow snapshot, job margin & risk, variations.', stat: `${formatCurrency(ovTotal)}/mo overhead · ${varCount} variation(s) pending` },
     { key:'marketing', icon:'📈', title:'Marketing & Growth', desc:'Website/SEO, ad performance, referral tracking.', stat: `${state.marketing.referrals.length} referral source(s)` },
     { key:'contacts', icon:'📇', title:'Contacts', desc:'Trade contacts by category, plus a supplier directory.', stat: `${tradeContactCount} trade contact(s) · ${state.contacts.suppliers.length} supplier(s)` }
@@ -1814,9 +1840,9 @@ function clearVariationTemplate(){
 
 /* ---------------------------------------------------------------
    13. PROJECTS
-   The single shared job selector for the six job-scoped tabs below
-   (Scheduling, Site Time, Files, Site Diary, To-Do, Handover & Defects) —
-   pick a job once here and every tab follows it, so you can't end up
+   The single shared job selector for the seven job-scoped tabs below
+   (Scheduling, Site Time, Files, Site Diary, To-Do, Handover & Defects,
+   Variations) — pick a job once here and every tab follows it, so you can't end up
    looking at Site Time for one job while thinking you're still on the
    one you had selected in Scheduling.
 --------------------------------------------------------------- */
@@ -1833,7 +1859,7 @@ function renderProjects(main){
 
   main.innerHTML = `
     <div class="section-head">
-      <div><h1>Projects</h1><p>Pick a job once — Scheduling, Site Time, Files, Site Diary, To-Do and Handover & Defects all follow the same selection.</p></div>
+      <div><h1>Projects</h1><p>Pick a job once — Scheduling, Site Time, Files, Site Diary, To-Do, Handover & Defects and Variations all follow the same selection.</p></div>
     </div>
     <div class="panel">
       <div class="field" style="max-width:420px;">
@@ -1856,6 +1882,7 @@ function renderProjects(main){
       <button class="subnav-btn ${projectsTab==='sitediary'?'active':''}" onclick="setProjectsTab('sitediary')">Site Diary</button>
       <button class="subnav-btn ${projectsTab==='todos'?'active':''}" onclick="setProjectsTab('todos')">To-Do List</button>
       <button class="subnav-btn ${projectsTab==='handover'?'active':''}" onclick="setProjectsTab('handover')">Handover & Defects</button>
+      <button class="subnav-btn ${projectsTab==='variations'?'active':''}" onclick="setProjectsTab('variations')">Variations</button>
     </div>
     <div id="projects-body"></div>
   `;
@@ -1885,6 +1912,8 @@ function renderProjectsBody(){
     renderSiteDiaryBody();
   } else if(projectsTab === 'todos'){
     body.innerHTML = renderTodoTab();
+  } else if(projectsTab === 'variations'){
+    body.innerHTML = renderVariationsTab();
   }
 }
 
@@ -2279,7 +2308,82 @@ async function removeProjectFile(scope, idx){
 }
 
 /* ---------------------------------------------------------------
-   17. HANDOVER & DEFECTS
+   17. VARIATIONS (a Projects tab)
+   A running log of changes from the drawings as they come up — separate
+   from Finance > Variations (which tracks financial claim status across
+   every job). This one is scoped to the selected job/lead, so a whole
+   set of changes can be reviewed and signed off by the client in one
+   sitting before the job starts.
+--------------------------------------------------------------- */
+function ensureVariationsLog(scope){
+  if(!state.variations.logs[scope]) state.variations.logs[scope] = { items: [] };
+}
+function formatSignedCurrency(n){
+  const num = Number(n)||0;
+  const sign = num > 0 ? '+' : (num < 0 ? '−' : '');
+  return sign + '$' + Math.abs(num).toLocaleString('en-AU', {maximumFractionDigits:0});
+}
+function toggleVariationSignedOff(scope, idx){
+  const item = state.variations.logs[scope].items[idx];
+  item.signedOff = !item.signedOff;
+  if(item.signedOff && !item.signedOffDate) item.signedOffDate = todayStr();
+  scheduleSave();
+  renderProjectsBody();
+}
+function renderVariationsTab(){
+  const scope = state.projects.selectedScope;
+  if(scope === 'general'){
+    return `<div class="panel"><p class="muted">Select an active job or pipeline lead above to log its variations.</p></div>`;
+  }
+  ensureVariationsLog(scope);
+  const items = state.variations.logs[scope].items;
+  const netImpact = items.reduce((s,v)=>s+(Number(v.costImpact)||0),0);
+  const signedOffCount = items.filter(v=>v.signedOff).length;
+  return `
+    <div class="panel">
+      <h3>Variations</h3>
+      <p class="panel-desc">Log every change from the drawings as it comes up — cost impact, trades affected, and whether the client has signed off — so nothing gets forgotten before the job starts.</p>
+      <div class="stat-row">
+        <div class="stat-card"><div class="stat-label">Logged</div><div class="stat-value" id="var-stat-count">${items.length}</div></div>
+        <div class="stat-card"><div class="stat-label">Net Cost Impact</div><div class="stat-value" id="var-stat-net">${formatSignedCurrency(netImpact)}</div></div>
+        <div class="stat-card"><div class="stat-label">Signed Off</div><div class="stat-value" id="var-stat-signedoff">${signedOffCount} / ${items.length}</div></div>
+      </div>
+      ${items.map((v,idx)=>renderVariationCard(scope, v, idx)).join('') || '<p class="muted">No variations logged yet — add the first one below.</p>'}
+      <button type="button" class="btn btn-ghost btn-sm" onclick="addRow('variations.logs.${scope}.items')">+ Add variation</button>
+    </div>
+  `;
+}
+function renderVariationCard(scope, v, idx){
+  const path = `variations.logs.${scope}.items`;
+  const impact = Number(v.costImpact)||0;
+  const costCls = impact > 0 ? 'var-cost-up' : (impact < 0 ? 'var-cost-down' : '');
+  return `
+    <div class="hd-card">
+      <div class="hd-card-head">
+        <input type="text" class="hd-item-name" placeholder="What changed (e.g. Ensuite window moved — per architect rev C)" data-path="${path}.${idx}.description" value="${escapeHtml(v.description)}">
+        <div class="var-head-meta">
+          <span class="var-cost ${costCls}" id="${computedId(path,idx,'costImpact')}">${formatSignedCurrency(v.costImpact)}</span>
+          <span class="${v.signedOff ? 'hd-ok-badge' : 'hd-missing-badge'}">${v.signedOff ? 'Signed off' : 'Pending sign-off'}</span>
+        </div>
+        <button type="button" class="icon-btn danger" title="Delete variation" onclick="deleteRow('${path}',${idx})">✕</button>
+      </div>
+      <div class="hd-card-grid">
+        <div class="field"><label class="field-label">Date</label>${renderDatePickerField({ path:`${path}.${idx}.date`, value: v.date })}</div>
+        <div class="field"><label class="field-label">Cost Impact ($, +/−)</label><input type="number" step="any" data-path="${path}.${idx}.costImpact" value="${v.costImpact===undefined||v.costImpact===''?'':v.costImpact}"></div>
+        <div class="field"><label class="field-label">Reference (drawing / revision)</label><input type="text" data-path="${path}.${idx}.reference" value="${escapeHtml(v.reference)}"></div>
+        <div class="field"><label class="field-label">Trades Involved</label><input type="text" placeholder="e.g. Plumber, Electrician" data-path="${path}.${idx}.trades" value="${escapeHtml(v.trades)}"></div>
+      </div>
+      <div class="field"><label class="field-label">Notes</label><textarea data-path="${path}.${idx}.notes" rows="2">${escapeHtml(v.notes)}</textarea></div>
+      <div class="var-signoff-row">
+        <label class="st-paid-toggle"><input type="checkbox" ${v.signedOff?'checked':''} onchange="toggleVariationSignedOff('${scope}',${idx})"> Client signed off</label>
+        <div class="field" style="max-width:180px; margin-bottom:0;"><label class="field-label">Signed Off Date</label>${renderDatePickerField({ path:`${path}.${idx}.signedOffDate`, value: v.signedOffDate })}</div>
+      </div>
+    </div>
+  `;
+}
+
+/* ---------------------------------------------------------------
+   18. HANDOVER & DEFECTS
    Job-scoped to Active Jobs only (handover is a late-stage process,
    so Pipeline Leads aren't offered here, unlike Site Diary/To-Do).
    Uploaded files are NEVER stored in state/localStorage — only their
@@ -2763,7 +2867,7 @@ function exportDefectsList(){
 }
 
 /* ---------------------------------------------------------------
-   18. FINANCE
+   19. FINANCE
 --------------------------------------------------------------- */
 let financeTab = 'overheads';
 function renderFinance(main){
@@ -2875,7 +2979,7 @@ function renderFinanceBody(){
 }
 
 /* ---------------------------------------------------------------
-   19. MARKETING & GROWTH
+   20. MARKETING & GROWTH
 --------------------------------------------------------------- */
 function renderMarketing(main){
   const w = state.marketing.website;
@@ -2920,7 +3024,7 @@ function renderMarketing(main){
 }
 
 /* ---------------------------------------------------------------
-   20. CONTACTS
+   21. CONTACTS
 --------------------------------------------------------------- */
 let contactsTab = 'trades';
 function renderContacts(main){
@@ -3012,7 +3116,7 @@ function deleteTradeCategory(){
 }
 
 /* ---------------------------------------------------------------
-   21. SITE DIARY (a Projects tab)
+   22. SITE DIARY (a Projects tab)
    Supports all three scopes — General, Active Job, Pipeline Lead —
    unlike Scheduling/Site Time/Handover which need an active job.
 --------------------------------------------------------------- */
@@ -3070,7 +3174,7 @@ function renderSiteDiaryBody(){
 }
 
 /* ---------------------------------------------------------------
-   22. TO-DO LIST (a Projects tab)
+   23. TO-DO LIST (a Projects tab)
    Same scope options as Site Diary: General, Active Job, or
    Pipeline Lead — tasks are kept separate per scope.
 --------------------------------------------------------------- */
@@ -3156,7 +3260,7 @@ function toggleTodoDone(i){
 function setTodoFilter(f){ todoFilter = f; renderProjectsBody(); }
 
 /* ---------------------------------------------------------------
-   23. INIT
+   24. INIT
 --------------------------------------------------------------- */
 buildSideNav();
 renderRoute();
