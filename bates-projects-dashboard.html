@@ -424,8 +424,9 @@
   .sched-label-del:hover{ opacity:1; }
   .sched-add-label-btn{ width:100%; margin-top:6px; }
   .sched-main{ flex:1; min-width:0; }
-  .sched-toolbar{ display:flex; align-items:center; gap:8px; margin-bottom:14px; }
+  .sched-toolbar{ display:flex; align-items:center; gap:8px; margin-bottom:14px; flex-wrap:wrap; }
   .sched-range{ font-weight:700; font-size:14px; margin-left:6px; }
+  .sched-view-toggle{ display:flex; gap:6px; margin-left:auto; }
   .sched-grid-wrap{ border:1px solid var(--border-soft); border-radius:var(--radius-sm); overflow:hidden; }
   .sched-grid-headers{ display:flex; border-bottom:1px solid var(--border); background:var(--bg-card); }
   .sched-gutter{ width:52px; flex-shrink:0; }
@@ -452,6 +453,17 @@
   .sched-form{ width:480px; max-width:100%; max-height:88vh; overflow-y:auto; }
   .sched-form-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; }
   .sched-form-actions{ display:flex; justify-content:space-between; align-items:center; margin-top:16px; padding-top:14px; border-top:1px solid var(--border-soft); }
+  .sched-month-weekdays{ display:grid; grid-template-columns: repeat(7,1fr); border-bottom:1px solid var(--border); background:var(--bg-card); }
+  .sched-month-weekday{ text-align:center; font-size:10.5px; font-weight:700; color:var(--text-faint); letter-spacing:0.04em; padding:8px 0; }
+  .sched-month-grid{ display:grid; grid-template-columns: repeat(7,1fr); }
+  .sched-month-cell{ min-height:96px; border-left:1px solid var(--border-soft); border-bottom:1px solid var(--border-soft); padding:5px; cursor:pointer; box-sizing:border-box; }
+  .sched-month-cell:hover{ background: rgba(255,255,255,0.02); }
+  .sched-month-cell.sched-month-outside{ opacity:0.35; }
+  .sched-month-cell.sched-month-today{ background: rgba(169,201,143,0.06); }
+  .sched-month-daynum{ font-size:12.5px; font-weight:700; margin-bottom:4px; width:22px; height:22px; display:flex; align-items:center; justify-content:center; border-radius:50%; }
+  .sched-month-chips{ display:flex; flex-direction:column; gap:2px; }
+  .sched-month-chip{ font-size:10.5px; color:#1c2016; font-weight:700; padding:2px 5px; border-radius:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:pointer; }
+  .sched-month-more{ font-size:10px; color:var(--text-faint); padding-left:5px; }
   .hd-connect-banner{ display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
 
   /* Printed handover pack / defects list documents */
@@ -3406,7 +3418,8 @@ const SCHED_END_HOUR = 22;    // 10pm (grid runs 6am–10pm)
 const SCHED_ROW_HEIGHT = 48;  // px per hour — keep in sync with the CSS repeating-gradient above
 const SCHED_COLOR_PALETTE = ['#8fd18f','#7fa8d1','#d1a37f','#c084d8','#d88f9e','#84c9d8','#d8c084'];
 
-let scheduleViewDate = new Date();   // reference date for the displayed week
+let scheduleView = 'week';           // 'week' | 'month'
+let scheduleViewDate = new Date();   // reference date for the displayed week/month
 let scheduleMiniCalDate = new Date(); // month currently shown in the mini calendar
 let scheduleFormOpen = false;
 let scheduleEditingId = null;
@@ -3447,6 +3460,13 @@ function renderScheduleBody(){
   const weekStart = scheduleStartOfWeek(scheduleViewDate);
   const days = Array.from({length:7}, (_,i)=>addDays(weekStart,i));
   const todayIso = todayStr();
+  const isWeek = scheduleView === 'week';
+  const rangeLabel = isWeek
+    ? `${formatDateShort(weekStart)} – ${formatDateShort(addDays(weekStart,6))}`
+    : scheduleViewDate.toLocaleDateString('en-AU', {month:'long', year:'numeric'});
+  const mainContent = isWeek
+    ? renderScheduleGrid(days, todayIso)
+    : renderScheduleMonthGrid(scheduleViewDate, todayIso);
   body.innerHTML = `
     <div class="sched-layout">
       <div class="sched-sidebar">
@@ -3457,16 +3477,24 @@ function renderScheduleBody(){
       <div class="panel sched-main">
         <div class="sched-toolbar">
           <button type="button" class="btn btn-ghost btn-sm" onclick="scheduleGoToday()">Today</button>
-          <button type="button" class="icon-btn" title="Previous week" onclick="scheduleShiftWeek(-1)">‹</button>
-          <button type="button" class="icon-btn" title="Next week" onclick="scheduleShiftWeek(1)">›</button>
-          <div class="sched-range">${formatDateShort(weekStart)} – ${formatDateShort(addDays(weekStart,6))}</div>
+          <button type="button" class="icon-btn" title="${isWeek?'Previous week':'Previous month'}" onclick="scheduleShiftPeriod(-1)">‹</button>
+          <button type="button" class="icon-btn" title="${isWeek?'Next week':'Next month'}" onclick="scheduleShiftPeriod(1)">›</button>
+          <div class="sched-range">${rangeLabel}</div>
+          <div class="sched-view-toggle">
+            <button type="button" class="subnav-btn ${isWeek?'active':''}" onclick="setScheduleView('week')">Week</button>
+            <button type="button" class="subnav-btn ${!isWeek?'active':''}" onclick="setScheduleView('month')">Month</button>
+          </div>
         </div>
-        ${renderScheduleGrid(days, todayIso)}
+        ${mainContent}
       </div>
     </div>
     <div id="sched-form-root"></div>
   `;
   if(scheduleFormOpen) renderScheduleForm();
+}
+function setScheduleView(view){
+  scheduleView = view;
+  renderScheduleBody();
 }
 
 function renderScheduleMiniCalendar(){
@@ -3505,9 +3533,9 @@ function renderScheduleMiniCalendar(){
   return `
     <div class="sched-mini-cal">
       <div class="dp-header">
-        <button type="button" class="dp-nav" title="Previous month" onclick="shiftScheduleMiniCalMonth(-1)">‹</button>
+        <button type="button" class="dp-nav" title="Browse to previous month" onclick="shiftScheduleMiniCalMonth(-1)">‹</button>
         <div class="dp-month-label">${monthLabel}</div>
-        <button type="button" class="dp-nav" title="Next month" onclick="shiftScheduleMiniCalMonth(1)">›</button>
+        <button type="button" class="dp-nav" title="Browse to next month" onclick="shiftScheduleMiniCalMonth(1)">›</button>
       </div>
       <div class="dp-weekdays">
         <div class="dp-weekday dp-weekend">Su</div><div class="dp-weekday">Mo</div><div class="dp-weekday">Tu</div>
@@ -3532,8 +3560,10 @@ function scheduleGoToday(){
   scheduleMiniCalDate = new Date();
   renderScheduleBody();
 }
-function scheduleShiftWeek(delta){
-  scheduleViewDate = addDays(scheduleViewDate, delta*7);
+function scheduleShiftPeriod(delta){
+  scheduleViewDate = scheduleView === 'week'
+    ? addDays(scheduleViewDate, delta*7)
+    : new Date(scheduleViewDate.getFullYear(), scheduleViewDate.getMonth()+delta, 1);
   scheduleMiniCalDate = new Date(scheduleViewDate);
   renderScheduleBody();
 }
@@ -3661,6 +3691,70 @@ function scheduleGridClick(e, iso){
   const endSnapped = Math.min(snapped+60, SCHED_END_HOUR*60);
   const endTime = `${pad(Math.floor(endSnapped/60))}:${pad(endSnapped%60)}`;
   openScheduleForm(null, { date: iso, startTime, endTime });
+}
+
+/* Month view — a traditional 6-week grid with each day's events shown as
+   small chips (capped, with a "+N more" overflow). Clicking a day jumps
+   to Week view for that date so its full timeline can be seen/edited. */
+function renderScheduleMonthGrid(monthDate, todayIso){
+  const viewYear = monthDate.getFullYear();
+  const viewMonth = monthDate.getMonth();
+  const first = new Date(viewYear, viewMonth, 1);
+  const startOffset = first.getDay();
+  const daysInMonth = new Date(viewYear, viewMonth+1, 0).getDate();
+  const totalCells = Math.ceil((startOffset + daysInMonth) / 7) * 7;
+
+  const visibleLabelIds = new Set(state.schedule.labels.filter(l=>l.visible).map(l=>l.id));
+  const labelById = Object.fromEntries(state.schedule.labels.map(l=>[l.id,l]));
+  const eventsByDate = {};
+  state.schedule.events.forEach(e=>{
+    if(!visibleLabelIds.has(e.labelId)) return;
+    (eventsByDate[e.date] = eventsByDate[e.date] || []).push(e);
+  });
+  Object.values(eventsByDate).forEach(list =>
+    list.sort((a,b)=> (scheduleTimeToMinutes(a.startTime)||0) - (scheduleTimeToMinutes(b.startTime)||0))
+  );
+
+  const MAX_CHIPS = 3;
+  const weekdayHeaders = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
+    .map(d=>`<div class="sched-month-weekday">${d}</div>`).join('');
+
+  let cells = '';
+  for(let i=0;i<totalCells;i++){
+    const dayNum = i - startOffset + 1;
+    const dateObj = new Date(viewYear, viewMonth, dayNum);
+    const inMonth = dayNum >= 1 && dayNum <= daysInMonth;
+    const iso = toIsoLocal(dateObj);
+    const isToday = iso === todayIso;
+    const dayEvents = eventsByDate[iso] || [];
+    const shown = dayEvents.slice(0, MAX_CHIPS);
+    const overflow = dayEvents.length - shown.length;
+    const chips = shown.map(e=>{
+      const label = labelById[e.labelId] || {color:'var(--accent)'};
+      const timePrefix = e.startTime ? `${formatScheduleTime(e.startTime)} ` : '';
+      return `<div class="sched-month-chip" style="background:${label.color};" onclick="event.stopPropagation(); openScheduleForm('${e.id}')" title="${escapeHtml(e.title)}">${timePrefix}${escapeHtml(e.title)}</div>`;
+    }).join('');
+    const moreLabel = overflow > 0 ? `<div class="sched-month-more">+${overflow} more</div>` : '';
+    cells += `
+      <div class="sched-month-cell ${inMonth?'':'sched-month-outside'} ${isToday?'sched-month-today':''}" onclick="scheduleMonthCellClick('${iso}')">
+        <div class="sched-month-daynum ${isToday?'sched-today-num':''}">${dateObj.getDate()}</div>
+        <div class="sched-month-chips">${chips}${moreLabel}</div>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="sched-grid-wrap">
+      <div class="sched-month-weekdays">${weekdayHeaders}</div>
+      <div class="sched-month-grid">${cells}</div>
+    </div>
+  `;
+}
+function scheduleMonthCellClick(iso){
+  scheduleViewDate = parseDateStr(iso) || new Date();
+  scheduleMiniCalDate = new Date(scheduleViewDate);
+  scheduleView = 'week';
+  renderScheduleBody();
 }
 
 function openScheduleForm(eventId, defaults){
