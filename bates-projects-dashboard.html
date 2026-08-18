@@ -406,6 +406,52 @@
   .var-cost.var-cost-up{ color: var(--warning); }
   .var-cost.var-cost-down{ color: var(--success); }
   .var-signoff-row{ display:flex; align-items:flex-end; gap:18px; flex-wrap:wrap; padding-top:4px; border-top:1px solid var(--border-soft); }
+
+  /* ---------- Schedule (week-view calendar) ---------- */
+  .sched-layout{ display:flex; gap:20px; align-items:flex-start; }
+  .sched-sidebar{ width:230px; flex-shrink:0; display:flex; flex-direction:column; gap:16px; }
+  .sched-create-btn{ width:100%; }
+  .sched-mini-cal{ background:var(--bg-card); border:1px solid var(--border-soft); border-radius:var(--radius-sm); padding:12px; }
+  .sched-mini-cal .dp-cell{ position:relative; }
+  .sched-mini-cal .dp-day.sched-has-events::after{ content:''; position:absolute; bottom:2px; left:50%; transform:translateX(-50%); width:4px; height:4px; border-radius:50%; background:var(--accent); }
+  .sched-labels{ background:var(--bg-card); border:1px solid var(--border-soft); border-radius:var(--radius-sm); padding:12px; }
+  .sched-labels-title{ font-size:11px; text-transform:uppercase; letter-spacing:0.04em; color:var(--text-faint); font-weight:700; margin-bottom:8px; }
+  .sched-label-row{ display:flex; align-items:center; justify-content:space-between; gap:6px; padding:4px 0; }
+  .sched-label-check{ display:flex; align-items:center; gap:8px; font-size:12.5px; cursor:pointer; min-width:0; }
+  .sched-label-check span.sched-label-name{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .sched-label-dot{ width:10px; height:10px; border-radius:3px; flex-shrink:0; }
+  .sched-label-del{ opacity:0.45; flex-shrink:0; }
+  .sched-label-del:hover{ opacity:1; }
+  .sched-add-label-btn{ width:100%; margin-top:6px; }
+  .sched-main{ flex:1; min-width:0; }
+  .sched-toolbar{ display:flex; align-items:center; gap:8px; margin-bottom:14px; }
+  .sched-range{ font-weight:700; font-size:14px; margin-left:6px; }
+  .sched-grid-wrap{ border:1px solid var(--border-soft); border-radius:var(--radius-sm); overflow:hidden; }
+  .sched-grid-headers{ display:flex; border-bottom:1px solid var(--border); background:var(--bg-card); }
+  .sched-gutter{ width:52px; flex-shrink:0; }
+  .sched-day-header{ flex:1; text-align:center; padding:8px 0; border-left:1px solid var(--border-soft); }
+  .sched-day-name{ font-size:10px; color:var(--text-faint); font-weight:700; letter-spacing:0.04em; }
+  .sched-day-num{ font-size:16px; font-weight:700; margin-top:3px; }
+  .sched-today-num{ display:inline-flex; align-items:center; justify-content:center; width:26px; height:26px; border-radius:50%; background:var(--accent); color:#1c2016; }
+  .sched-grid-scroll{ display:flex; max-height:600px; overflow-y:auto; }
+  .sched-hours-col{ width:52px; flex-shrink:0; }
+  .sched-hour-row{ position:relative; box-sizing:border-box; }
+  .sched-hour-label{ position:absolute; top:-7px; right:8px; font-size:10.5px; color:var(--text-faint); }
+  .sched-days{ display:flex; flex:1; position:relative; }
+  .sched-day-col{
+    flex:1; position:relative; border-left:1px solid var(--border-soft); cursor:pointer; box-sizing:border-box;
+    background-image: repeating-linear-gradient(to bottom, var(--border-soft) 0, var(--border-soft) 1px, transparent 1px, transparent 48px);
+  }
+  .sched-today-col{ background-color: rgba(169,201,143,0.06); }
+  .sched-event{ position:absolute; left:2px; right:2px; border-radius:5px; padding:3px 6px; overflow:hidden; cursor:pointer; color:#1c2016; font-size:11px; line-height:1.3; box-shadow:0 1px 3px rgba(0,0,0,0.3); z-index:2; }
+  .sched-event-title{ display:block; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .sched-event-time{ display:block; font-size:10px; opacity:0.85; }
+  .sched-now-line{ position:absolute; left:0; right:0; height:2px; background:var(--danger); z-index:3; }
+  .sched-now-line::before{ content:''; position:absolute; left:-4px; top:-3px; width:8px; height:8px; border-radius:50%; background:var(--danger); }
+  .sched-form-overlay{ position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:250; padding:20px; }
+  .sched-form{ width:480px; max-width:100%; max-height:88vh; overflow-y:auto; }
+  .sched-form-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; }
+  .sched-form-actions{ display:flex; justify-content:space-between; align-items:center; margin-top:16px; padding-top:14px; border-top:1px solid var(--border-soft); }
   .hd-connect-banner{ display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
 
   /* Printed handover pack / defects list documents */
@@ -746,6 +792,20 @@ const DEFAULT_DATA = {
         tasks: [ { text: 'Sample task — edit or delete', done: false, due: '', priority: 'Medium' } ]
       }
     }
+  },
+
+  /* A general week-view calendar (not job-scoped, unlike Projects) — labels
+     work like Google Calendar's "My calendars": each event belongs to a
+     label, and unticking a label's checkbox hides its events from the grid
+     without deleting anything. */
+  schedule: {
+    labels: [
+      { id: 'label-default', name: 'Wilson Schedule', color: '#8fd18f', visible: true }
+    ],
+    events: [
+      { id: 'event-sample-a', title: 'Gym & Exercise', date: todayStr(), startTime: '07:00', endTime: '08:00', labelId: 'label-default', notes: '' },
+      { id: 'event-sample-b', title: 'Client Calls & Zoom Meetings', date: todayStr(), startTime: '11:00', endTime: '12:30', labelId: 'label-default', notes: '' }
+    ]
   }
 };
 
@@ -1341,6 +1401,7 @@ const ROUTES = [
   { key:'estimating', label:'Estimating & Quoting', icon:'🧮', render: renderEstimating },
   { key:'systems', label:'Systems', icon:'🗂️', render: renderSystems },
   { key:'projects', label:'Projects', icon:'📁', render: renderProjects },
+  { key:'schedule', label:'Schedule', icon:'📅', render: renderSchedule },
   { key:'finance', label:'Finance', icon:'💰', render: renderFinance },
   { key:'marketing', label:'Marketing & Growth', icon:'📈', render: renderMarketing },
   { key:'contacts', label:'Contacts', icon:'📇', render: renderContacts }
@@ -1388,6 +1449,7 @@ function renderHome(main){
     { key:'estimating', icon:'🧮', title:'Estimating & Quoting', desc:'PriceBook reference, workflow checklists, quotes log.', stat: `${state.estimating.quotesLog.length} quote(s) logged` },
     { key:'systems', icon:'🗂️', title:'Systems', desc:'Fillable document templates — fill in, then print or save as PDF.', stat: 'Variation Notice template' },
     { key:'projects', icon:'📁', title:'Projects', desc:'Pick a job once — Scheduling, Site Time, Files, Site Diary, To-Do, Handover & Defects, Variations and Cost Tracker all follow it.', stat: `${totalHoursLogged} hr logged · ${handoverWarrantyCount} warranty item(s) · ${handoverOpenDefects} open defect(s) · ${totalDiaryEntries} diary entr${totalDiaryEntries===1?'y':'ies'} · ${openTodos} open task${openTodos===1?'':'s'}` },
+    { key:'schedule', icon:'📅', title:'Schedule', desc:'A week-view calendar for your day-to-day — gym, client calls, admin, anything — grouped under toggleable labels like Wilson Schedule.', stat: `${state.schedule.events.length} event(s) · ${state.schedule.labels.length} label${state.schedule.labels.length===1?'':'s'}` },
     { key:'finance', icon:'💰', title:'Finance', desc:'Overhead audit, cash flow snapshot, job margin & risk, variations.', stat: `${formatCurrency(ovTotal)}/mo overhead · ${varCount} variation(s) pending` },
     { key:'marketing', icon:'📈', title:'Marketing & Growth', desc:'Website/SEO, ad performance, referral tracking.', stat: `${state.marketing.referrals.length} referral source(s)` },
     { key:'contacts', icon:'📇', title:'Contacts', desc:'Trade contacts by category, plus a supplier directory.', stat: `${tradeContactCount} trade contact(s) · ${state.contacts.suppliers.length} supplier(s)` }
@@ -3332,7 +3394,357 @@ function toggleTodoDone(i){
 function setTodoFilter(f){ todoFilter = f; renderProjectsBody(); }
 
 /* ---------------------------------------------------------------
-   25. INIT
+   25. SCHEDULE
+   A general week-view calendar, not job-scoped like Projects — your
+   day-to-day: gym, client calls, admin, anything. Modelled on Google
+   Calendar: a mini month calendar + "My calendars" label list on the
+   left, a Sun–Sat hour grid on the right. Every event belongs to a
+   label; unticking a label hides its events without deleting them.
+--------------------------------------------------------------- */
+const SCHED_START_HOUR = 6;   // 6am
+const SCHED_END_HOUR = 22;    // 10pm (grid runs 6am–10pm)
+const SCHED_ROW_HEIGHT = 48;  // px per hour — keep in sync with the CSS repeating-gradient above
+const SCHED_COLOR_PALETTE = ['#8fd18f','#7fa8d1','#d1a37f','#c084d8','#d88f9e','#84c9d8','#d8c084'];
+
+let scheduleViewDate = new Date();   // reference date for the displayed week
+let scheduleMiniCalDate = new Date(); // month currently shown in the mini calendar
+let scheduleFormOpen = false;
+let scheduleEditingId = null;
+let scheduleFormDefaults = null;
+
+function scheduleStartOfWeek(d){ return addDays(d, -d.getDay()); }
+function scheduleTimeToMinutes(t){
+  if(!t) return null;
+  const [h,m] = t.split(':').map(Number);
+  return h*60 + (m||0);
+}
+function scheduleGridTop(minutes){ return ((minutes - SCHED_START_HOUR*60) / 60) * SCHED_ROW_HEIGHT; }
+function formatScheduleTime(t){
+  if(!t) return '';
+  const [h,m] = t.split(':').map(Number);
+  const period = h < 12 ? 'am' : 'pm';
+  let h12 = h % 12; if(h12 === 0) h12 = 12;
+  return m === 0 ? `${h12}${period}` : `${h12}:${String(m).padStart(2,'0')}${period}`;
+}
+function formatScheduleHourLabel(hour){
+  const period = hour < 12 ? 'AM' : 'PM';
+  let h12 = hour % 12; if(h12 === 0) h12 = 12;
+  return `${h12} ${period}`;
+}
+
+function renderSchedule(main){
+  main.innerHTML = `
+    <div class="section-head">
+      <div><h1>Schedule</h1><p>A week-view calendar for your day-to-day — gym, client calls, admin, anything — grouped under toggleable labels like Wilson Schedule.</p></div>
+    </div>
+    <div id="schedule-body"></div>
+  `;
+  renderScheduleBody();
+}
+function renderScheduleBody(){
+  const body = document.getElementById('schedule-body');
+  if(!body) return;
+  const weekStart = scheduleStartOfWeek(scheduleViewDate);
+  const days = Array.from({length:7}, (_,i)=>addDays(weekStart,i));
+  const todayIso = todayStr();
+  body.innerHTML = `
+    <div class="sched-layout">
+      <div class="sched-sidebar">
+        <button type="button" class="btn btn-primary sched-create-btn" onclick="openScheduleForm()">+ Create</button>
+        ${renderScheduleMiniCalendar()}
+        ${renderScheduleLabelsPanel()}
+      </div>
+      <div class="panel sched-main">
+        <div class="sched-toolbar">
+          <button type="button" class="btn btn-ghost btn-sm" onclick="scheduleGoToday()">Today</button>
+          <button type="button" class="icon-btn" title="Previous week" onclick="scheduleShiftWeek(-1)">‹</button>
+          <button type="button" class="icon-btn" title="Next week" onclick="scheduleShiftWeek(1)">›</button>
+          <div class="sched-range">${formatDateShort(weekStart)} – ${formatDateShort(addDays(weekStart,6))}</div>
+        </div>
+        ${renderScheduleGrid(days, todayIso)}
+      </div>
+    </div>
+    <div id="sched-form-root"></div>
+  `;
+  if(scheduleFormOpen) renderScheduleForm();
+}
+
+function renderScheduleMiniCalendar(){
+  const viewYear = scheduleMiniCalDate.getFullYear();
+  const viewMonth = scheduleMiniCalDate.getMonth();
+  const first = new Date(viewYear, viewMonth, 1);
+  const startOffset = first.getDay();
+  const daysInMonth = new Date(viewYear, viewMonth+1, 0).getDate();
+  const daysInPrevMonth = new Date(viewYear, viewMonth, 0).getDate();
+  const monthLabel = first.toLocaleDateString('en-AU', {month:'long', year:'numeric'});
+  const todayIso = todayStr();
+  const weekStart = scheduleStartOfWeek(scheduleViewDate);
+  const weekEnd = addDays(weekStart,6);
+  const eventDates = new Set(state.schedule.events.map(e=>e.date));
+
+  let cells = '';
+  for(let i=0;i<startOffset;i++){
+    cells += `<div class="dp-cell dp-outside">${daysInPrevMonth - startOffset + 1 + i}</div>`;
+  }
+  for(let d=1; d<=daysInMonth; d++){
+    const dateObj = new Date(viewYear, viewMonth, d);
+    const iso = toIsoLocal(dateObj);
+    const dow = dateObj.getDay();
+    const classes = ['dp-cell','dp-day'];
+    if(dow===0 || dow===6) classes.push('dp-weekend');
+    if(iso === todayIso) classes.push('dp-today');
+    if(dateObj >= weekStart && dateObj <= weekEnd) classes.push('dp-selected');
+    if(eventDates.has(iso)) classes.push('sched-has-events');
+    cells += `<button type="button" class="${classes.join(' ')}" onclick="scheduleJumpToDate('${iso}')">${d}</button>`;
+  }
+  const trailing = (7 - ((startOffset + daysInMonth) % 7)) % 7;
+  for(let i=1;i<=trailing;i++){
+    cells += `<div class="dp-cell dp-outside">${i}</div>`;
+  }
+
+  return `
+    <div class="sched-mini-cal">
+      <div class="dp-header">
+        <button type="button" class="dp-nav" title="Previous month" onclick="shiftScheduleMiniCalMonth(-1)">‹</button>
+        <div class="dp-month-label">${monthLabel}</div>
+        <button type="button" class="dp-nav" title="Next month" onclick="shiftScheduleMiniCalMonth(1)">›</button>
+      </div>
+      <div class="dp-weekdays">
+        <div class="dp-weekday dp-weekend">Su</div><div class="dp-weekday">Mo</div><div class="dp-weekday">Tu</div>
+        <div class="dp-weekday">We</div><div class="dp-weekday">Th</div><div class="dp-weekday">Fr</div>
+        <div class="dp-weekday dp-weekend">Sa</div>
+      </div>
+      <div class="dp-grid">${cells}</div>
+    </div>
+  `;
+}
+function shiftScheduleMiniCalMonth(delta){
+  scheduleMiniCalDate = new Date(scheduleMiniCalDate.getFullYear(), scheduleMiniCalDate.getMonth()+delta, 1);
+  renderScheduleBody();
+}
+function scheduleJumpToDate(iso){
+  scheduleViewDate = parseDateStr(iso) || new Date();
+  scheduleMiniCalDate = new Date(scheduleViewDate);
+  renderScheduleBody();
+}
+function scheduleGoToday(){
+  scheduleViewDate = new Date();
+  scheduleMiniCalDate = new Date();
+  renderScheduleBody();
+}
+function scheduleShiftWeek(delta){
+  scheduleViewDate = addDays(scheduleViewDate, delta*7);
+  scheduleMiniCalDate = new Date(scheduleViewDate);
+  renderScheduleBody();
+}
+
+function renderScheduleLabelsPanel(){
+  const labels = state.schedule.labels;
+  return `
+    <div class="sched-labels">
+      <div class="sched-labels-title">My Calendars</div>
+      ${labels.map(l=>`
+        <div class="sched-label-row">
+          <label class="sched-label-check">
+            <input type="checkbox" ${l.visible?'checked':''} onchange="toggleScheduleLabel('${l.id}')">
+            <span class="sched-label-dot" style="background:${l.color}"></span>
+            <span class="sched-label-name">${escapeHtml(l.name)}</span>
+          </label>
+          <button type="button" class="icon-btn danger sched-label-del" title="Delete this calendar/label" onclick="deleteScheduleLabel('${l.id}')">✕</button>
+        </div>
+      `).join('')}
+      <button type="button" class="btn btn-ghost btn-sm sched-add-label-btn" onclick="addScheduleLabel()">+ Create new label</button>
+    </div>
+  `;
+}
+function addScheduleLabel(){
+  const name = prompt('New calendar / label name:');
+  if(!name || !name.trim()) return;
+  const color = SCHED_COLOR_PALETTE[state.schedule.labels.length % SCHED_COLOR_PALETTE.length];
+  state.schedule.labels.push({ id: uid(), name: name.trim(), color, visible: true });
+  scheduleSave();
+  renderScheduleBody();
+}
+function toggleScheduleLabel(id){
+  const label = state.schedule.labels.find(l=>l.id===id);
+  if(label) label.visible = !label.visible;
+  scheduleSave();
+  renderScheduleBody();
+}
+function deleteScheduleLabel(id){
+  if(state.schedule.labels.length <= 1){ alert('You need at least one calendar/label.'); return; }
+  const eventCount = state.schedule.events.filter(e=>e.labelId===id).length;
+  const msg = eventCount > 0
+    ? `Delete this calendar? Its ${eventCount} event(s) will be deleted too.`
+    : 'Delete this calendar?';
+  if(!confirm(msg)) return;
+  state.schedule.events = state.schedule.events.filter(e=>e.labelId!==id);
+  state.schedule.labels = state.schedule.labels.filter(l=>l.id!==id);
+  scheduleSave();
+  renderScheduleBody();
+}
+
+function renderScheduleGrid(days, todayIso){
+  const totalHours = SCHED_END_HOUR - SCHED_START_HOUR;
+  const gridHeight = totalHours * SCHED_ROW_HEIGHT;
+  const hourRows = Array.from({length: totalHours}, (_,i)=>{
+    const hour = SCHED_START_HOUR + i;
+    return `<div class="sched-hour-row" style="height:${SCHED_ROW_HEIGHT}px;"><span class="sched-hour-label">${formatScheduleHourLabel(hour)}</span></div>`;
+  }).join('');
+
+  const visibleLabelIds = new Set(state.schedule.labels.filter(l=>l.visible).map(l=>l.id));
+  const labelById = Object.fromEntries(state.schedule.labels.map(l=>[l.id,l]));
+
+  const dayHeaders = days.map(d=>{
+    const iso = toIsoLocal(d);
+    const isToday = iso === todayIso;
+    return `
+      <div class="sched-day-header">
+        <div class="sched-day-name">${d.toLocaleDateString('en-AU',{weekday:'short'}).toUpperCase()}</div>
+        <div class="sched-day-num ${isToday?'sched-today-num':''}">${d.getDate()}</div>
+      </div>
+    `;
+  }).join('');
+
+  const dayCols = days.map(d=>{
+    const iso = toIsoLocal(d);
+    const isToday = iso === todayIso;
+    const dayEvents = state.schedule.events.filter(e=>e.date===iso && visibleLabelIds.has(e.labelId));
+    const eventsHtml = dayEvents.map(e=>{
+      const label = labelById[e.labelId] || {color:'var(--accent)'};
+      const startMin = scheduleTimeToMinutes(e.startTime) ?? SCHED_START_HOUR*60;
+      const endMin = scheduleTimeToMinutes(e.endTime) ?? (startMin+30);
+      const top = Math.max(scheduleGridTop(startMin), 0);
+      const height = Math.max(scheduleGridTop(Math.max(endMin,startMin+15)) - top, 18);
+      return `
+        <div class="sched-event" style="top:${top}px; height:${height}px; background:${label.color};" onclick="event.stopPropagation(); openScheduleForm('${e.id}')" title="${escapeHtml(e.title)}">
+          <span class="sched-event-title">${escapeHtml(e.title)}</span>
+          <span class="sched-event-time">${formatScheduleTime(e.startTime)} – ${formatScheduleTime(e.endTime)}</span>
+        </div>
+      `;
+    }).join('');
+    const nowLine = isToday ? renderScheduleNowLine() : '';
+    return `
+      <div class="sched-day-col ${isToday?'sched-today-col':''}" style="height:${gridHeight}px;" onclick="scheduleGridClick(event,'${iso}')">
+        ${eventsHtml}
+        ${nowLine}
+      </div>
+    `;
+  }).join('');
+
+  return `
+    <div class="sched-grid-wrap">
+      <div class="sched-grid-headers">
+        <div class="sched-gutter"></div>
+        ${dayHeaders}
+      </div>
+      <div class="sched-grid-scroll">
+        <div class="sched-hours-col">${hourRows}</div>
+        <div class="sched-days">${dayCols}</div>
+      </div>
+    </div>
+  `;
+}
+function renderScheduleNowLine(){
+  const now = new Date();
+  const mins = now.getHours()*60 + now.getMinutes();
+  if(mins < SCHED_START_HOUR*60 || mins > SCHED_END_HOUR*60) return '';
+  return `<div class="sched-now-line" style="top:${scheduleGridTop(mins)}px;"></div>`;
+}
+function scheduleGridClick(e, iso){
+  const rect = e.currentTarget.getBoundingClientRect();
+  const offsetY = e.clientY - rect.top;
+  const rawMinutes = SCHED_START_HOUR*60 + (offsetY / SCHED_ROW_HEIGHT)*60;
+  const snapped = Math.max(Math.round(rawMinutes/15)*15, SCHED_START_HOUR*60);
+  const pad = n => String(n).padStart(2,'0');
+  const startTime = `${pad(Math.floor(snapped/60))}:${pad(snapped%60)}`;
+  const endSnapped = Math.min(snapped+60, SCHED_END_HOUR*60);
+  const endTime = `${pad(Math.floor(endSnapped/60))}:${pad(endSnapped%60)}`;
+  openScheduleForm(null, { date: iso, startTime, endTime });
+}
+
+function openScheduleForm(eventId, defaults){
+  scheduleFormOpen = true;
+  scheduleEditingId = eventId || null;
+  scheduleFormDefaults = defaults || null;
+  renderScheduleForm();
+  document.addEventListener('keydown', onScheduleFormKeydown);
+}
+function onScheduleFormKeydown(e){ if(e.key === 'Escape') closeScheduleForm(); }
+function closeScheduleForm(){
+  scheduleFormOpen = false;
+  scheduleEditingId = null;
+  scheduleFormDefaults = null;
+  document.removeEventListener('keydown', onScheduleFormKeydown);
+  const root = document.getElementById('sched-form-root');
+  if(root) root.innerHTML = '';
+}
+function renderScheduleForm(){
+  const root = document.getElementById('sched-form-root');
+  if(!root) return;
+  const editing = scheduleEditingId ? state.schedule.events.find(e=>e.id===scheduleEditingId) : null;
+  const d = editing || scheduleFormDefaults || {};
+  const labels = state.schedule.labels;
+  const defaultLabelId = editing ? editing.labelId : (labels[0] && labels[0].id);
+  root.innerHTML = `
+    <div class="sched-form-overlay" onclick="if(event.target===this) closeScheduleForm()">
+      <div class="sched-form panel">
+        <div class="sched-form-head">
+          <h3>${editing ? 'Edit event' : 'New event'}</h3>
+          <button type="button" class="icon-btn" title="Close" onclick="closeScheduleForm()">✕</button>
+        </div>
+        <div class="field"><label class="field-label">Title</label><input type="text" id="sf-title" value="${escapeHtml(editing?editing.title:'')}" placeholder="e.g. Client Calls & Zoom Meetings"></div>
+        <div class="field-row">
+          <div class="field"><label class="field-label">Date</label>${renderDatePickerField({ id:'sf-date-hidden', value: d.date || todayStr() })}</div>
+          <div class="field"><label class="field-label">Start</label><input type="time" id="sf-start" value="${d.startTime || '09:00'}"></div>
+          <div class="field"><label class="field-label">End</label><input type="time" id="sf-end" value="${d.endTime || '10:00'}"></div>
+        </div>
+        <div class="field"><label class="field-label">Calendar / Label</label>
+          <select id="sf-label">
+            ${labels.map(l=>`<option value="${l.id}" ${l.id===defaultLabelId?'selected':''}>${escapeHtml(l.name)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field"><label class="field-label">Notes</label><textarea id="sf-notes" rows="2">${escapeHtml(editing?editing.notes:'')}</textarea></div>
+        <div class="sched-form-actions">
+          ${editing ? `<button type="button" class="btn btn-ghost" style="color:var(--danger);" onclick="deleteScheduleEvent('${editing.id}')">Delete</button>` : '<span></span>'}
+          <div>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="closeScheduleForm()">Cancel</button>
+            <button type="button" class="btn btn-primary btn-sm" onclick="saveScheduleEvent()">Save</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+function saveScheduleEvent(){
+  const title = document.getElementById('sf-title').value.trim();
+  if(!title){ alert('Give the event a title first.'); return; }
+  const date = document.getElementById('sf-date-hidden').value;
+  if(!date){ alert('Pick a date for this event.'); return; }
+  const startTime = document.getElementById('sf-start').value || '09:00';
+  const endTime = document.getElementById('sf-end').value || '10:00';
+  const labelId = document.getElementById('sf-label').value;
+  const notes = document.getElementById('sf-notes').value.trim();
+  if(scheduleEditingId){
+    const ev = state.schedule.events.find(e=>e.id===scheduleEditingId);
+    Object.assign(ev, { title, date, startTime, endTime, labelId, notes });
+  } else {
+    state.schedule.events.push({ id: uid(), title, date, startTime, endTime, labelId, notes });
+  }
+  scheduleSave();
+  closeScheduleForm();
+  renderScheduleBody();
+}
+function deleteScheduleEvent(id){
+  if(!confirm('Delete this event?')) return;
+  state.schedule.events = state.schedule.events.filter(e=>e.id!==id);
+  scheduleSave();
+  closeScheduleForm();
+  renderScheduleBody();
+}
+
+/* ---------------------------------------------------------------
+   26. INIT
 --------------------------------------------------------------- */
 buildSideNav();
 renderRoute();
