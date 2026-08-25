@@ -346,6 +346,25 @@
   .todo-row input:hover, .todo-row select:hover{ border-color: var(--border); }
   .todo-row input:focus, .todo-row select:focus{ background: var(--bg-input); border-color: var(--accent); }
 
+  /* ---------- Builder's To-Do List (Dashboard) ---------- */
+  .btd-head{ display:flex; align-items:center; justify-content:space-between; }
+  .btd-open-count{ font-size:12px; color:var(--text-faint); font-weight:700; }
+  .btd-list{ display:flex; flex-direction:column; gap:2px; margin:10px 0 14px; }
+  .btd-row{ display:grid; grid-template-columns: auto auto 1fr 140px 32px; align-items:center; gap:10px; padding:8px 6px; border-bottom:1px solid var(--border-soft); }
+  .btd-row:last-child{ border-bottom:none; }
+  .btd-row input[type=checkbox]{ width:17px; height:17px; accent-color: var(--accent); cursor:pointer; }
+  .btd-bubble{ width:12px; height:12px; border-radius:50%; flex-shrink:0; }
+  .btd-bubble-low{ background: var(--success); }
+  .btd-bubble-medium{ background: var(--warning); }
+  .btd-bubble-urgent{ background: var(--danger); box-shadow: 0 0 0 3px rgba(224,128,111,0.22); }
+  .btd-text{ background:transparent; border:1px solid transparent; padding:6px; color:var(--text); font-size:13px; width:100%; }
+  .btd-text:hover{ border-color:var(--border); }
+  .btd-text:focus{ background:var(--bg-input); border-color:var(--accent); }
+  .btd-row.is-done .btd-text{ text-decoration:line-through; color:var(--text-faint); }
+  .btd-text.btd-text-urgent{ color: var(--danger); font-weight:700; }
+  .btd-urgency-select{ width:100%; }
+  .btd-add-row{ display:grid; grid-template-columns: 1fr 150px auto; gap:10px; }
+
   footer.app-footer{ text-align:center; padding: 20px; color: var(--text-faint); font-size:11.5px; }
 
   /* ---------- Systems: printable document templates ---------- */
@@ -817,6 +836,14 @@ const DEFAULT_DATA = {
     events: [
       { id: 'event-sample-a', title: 'Gym & Exercise', date: todayStr(), startTime: '07:00', endTime: '08:00', labelId: 'label-default', notes: '' },
       { id: 'event-sample-b', title: 'Client Calls & Zoom Meetings', date: todayStr(), startTime: '11:00', endTime: '12:30', labelId: 'label-default', notes: '' }
+    ]
+  },
+
+  /* Quick day-to-day to-do list on the Dashboard itself — separate from the
+     per-job To-Do List inside Projects. urgency: 'low' | 'medium' | 'urgent'. */
+  builderTodos: {
+    tasks: [
+      { text: 'Sample task — edit or delete', done: false, urgency: 'low' }
     ]
   }
 };
@@ -1481,7 +1508,79 @@ function renderHome(main){
         </div>
       `).join('')}
     </div>
+    <div id="builder-todo-body"></div>
   `;
+  renderBuilderTodoBody();
+}
+const BUILDER_TODO_URGENCY_LABELS = { low:'Not important', medium:'Medium', urgent:'Urgent' };
+function renderBuilderTodoBody(){
+  const body = document.getElementById('builder-todo-body');
+  if(!body) return;
+  body.innerHTML = renderBuilderTodoPanel();
+}
+function renderBuilderTodoPanel(){
+  const tasks = state.builderTodos.tasks;
+  const open = tasks.filter(t=>!t.done).length;
+  const rows = tasks.map((t,i)=>{
+    const urgency = t.urgency || 'low';
+    return `
+      <div class="btd-row ${t.done?'is-done':''}">
+        <input type="checkbox" ${t.done?'checked':''} onchange="toggleBuilderTodo(${i})">
+        <span class="btd-bubble btd-bubble-${urgency}" title="${BUILDER_TODO_URGENCY_LABELS[urgency]}"></span>
+        <input type="text" class="btd-text ${!t.done && urgency==='urgent' ? 'btd-text-urgent':''}" placeholder="What needs doing?" data-path="builderTodos.tasks.${i}.text" value="${escapeHtml(t.text)}">
+        <select class="btd-urgency-select" onchange="setBuilderTodoUrgency(${i}, this.value)">
+          <option value="low" ${urgency==='low'?'selected':''}>Not important</option>
+          <option value="medium" ${urgency==='medium'?'selected':''}>Medium</option>
+          <option value="urgent" ${urgency==='urgent'?'selected':''}>Urgent</option>
+        </select>
+        <button type="button" class="icon-btn danger" title="Delete task" onclick="deleteBuilderTodo(${i})">✕</button>
+      </div>
+    `;
+  }).join('');
+  return `
+    <div class="panel">
+      <div class="btd-head">
+        <h3>Builder's To-Do List</h3>
+        <span class="btd-open-count">${open} open</span>
+      </div>
+      <p class="panel-desc">Your own day-to-day list — tick off what's done, and set an urgency so the important stuff stands out: green for not important, yellow for medium, red for urgent.</p>
+      <div class="btd-list">${rows || '<p class="muted">Nothing on the list — add your first task below.</p>'}</div>
+      <div class="btd-add-row">
+        <input type="text" id="btd-new-text" placeholder="Add a task..." onkeydown="if(event.key==='Enter') addBuilderTodo()">
+        <select id="btd-new-urgency">
+          <option value="low">Not important</option>
+          <option value="medium">Medium</option>
+          <option value="urgent">Urgent</option>
+        </select>
+        <button type="button" class="btn btn-primary btn-sm" onclick="addBuilderTodo()">+ Add</button>
+      </div>
+    </div>
+  `;
+}
+function toggleBuilderTodo(i){
+  state.builderTodos.tasks[i].done = !state.builderTodos.tasks[i].done;
+  scheduleSave();
+  renderBuilderTodoBody();
+}
+function setBuilderTodoUrgency(i, urgency){
+  state.builderTodos.tasks[i].urgency = urgency;
+  scheduleSave();
+  renderBuilderTodoBody();
+}
+function addBuilderTodo(){
+  const input = document.getElementById('btd-new-text');
+  const text = input.value.trim();
+  if(!text){ input.focus(); return; }
+  const urgency = document.getElementById('btd-new-urgency').value;
+  state.builderTodos.tasks.push({ text, done:false, urgency });
+  scheduleSave();
+  renderBuilderTodoBody();
+}
+function deleteBuilderTodo(i){
+  if(!confirm('Delete this task?')) return;
+  state.builderTodos.tasks.splice(i,1);
+  scheduleSave();
+  renderBuilderTodoBody();
 }
 
 /* ---------------------------------------------------------------
