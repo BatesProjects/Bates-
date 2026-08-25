@@ -165,21 +165,6 @@
   /* ---------- Home grid ---------- */
   .home-header{ margin-bottom:22px; }
   .home-header h1{ font-size:24px; }
-  .card-grid{
-    display:grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-    gap:16px;
-  }
-  .nav-card{
-    background: var(--bg-card); border:1px solid var(--border-soft);
-    border-radius: var(--radius); padding:18px; cursor:pointer;
-    display:flex; flex-direction:column; gap:10px;
-    transition: border-color .12s, transform .12s;
-  }
-  .nav-card:hover{ border-color: var(--accent); transform: translateY(-1px); }
-  .nav-card .card-icon{ font-size: 26px; }
-  .nav-card h3{ font-size:15.5px; }
-  .nav-card p{ font-size:12.5px; color: var(--text-dim); margin-bottom:0; }
-  .nav-card .card-stat{ font-size:11.5px; color: var(--accent); font-weight:700; margin-top:auto; padding-top:8px; border-top:1px dashed var(--border-soft); }
 
   /* ---------- Section chrome ---------- */
   .section-head{ display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:20px; }
@@ -1468,45 +1453,10 @@ window.addEventListener('hashchange', renderRoute);
    8. HOME
 --------------------------------------------------------------- */
 function renderHome(main){
-  const jobCount = state.pipeline.activeJobs.length;
-  const leadCount = state.pipeline.leads.length;
-  const ovTotal = state.finance.overheads.categories.reduce((s,c)=>s+(Number(c.monthly)||0),0);
-  const varCount = state.finance.variations.filter(v=>v.status==='Pending').length;
-  const openTodos = Object.values(state.todos.logs).reduce((s,log)=>s+log.tasks.filter(t=>!t.done).length,0);
-  const tradeContactCount = state.contacts.trades.reduce((s,t)=>s+t.contacts.length,0);
-  const totalHoursLogged = Object.values(state.siteTime.logs).reduce((s,log)=>{
-    const empH = (log.employees||[]).reduce((s2,r)=>s2+(Number(r.hours)||0),0);
-    const tradeH = (log.trades||[]).reduce((s2,r)=>s2+(Number(r.hours)||0),0);
-    return s + empH + tradeH;
-  },0);
-  const totalDiaryEntries = Object.values(state.siteDiary.logs).reduce((s,log)=>s+log.dailyEntries.length+log.lessonsEntries.length,0);
-  const handoverWarrantyCount = Object.values(state.handoverDefects.logs).reduce((s,log)=>s+log.warrantyItems.length,0);
-  const handoverOpenDefects = Object.values(state.handoverDefects.logs).reduce((s,log)=>s+log.defects.filter(d=>d.status!=='Closed').length,0);
-  const cards = [
-    { key:'business', icon:'🏗️', title:'The Business', desc:'Vision & goals, build process, systems guide, compliance & licensing.', stat: 'Lic. 480112C · $20M PL' },
-    { key:'pipeline', icon:'📋', title:'Job Pipeline', desc:'Active jobs, pipeline planner, leads & enquiries tracker.', stat: `${jobCount} active job${jobCount===1?'':'s'} · ${leadCount} lead${leadCount===1?'':'s'}` },
-    { key:'estimating', icon:'🧮', title:'Estimating & Quoting', desc:'PriceBook reference, workflow checklists, quotes log.', stat: `${state.estimating.quotesLog.length} quote(s) logged` },
-    { key:'systems', icon:'🗂️', title:'Systems', desc:'Fillable document templates — fill in, then print or save as PDF.', stat: 'Variation Notice template' },
-    { key:'projects', icon:'📁', title:'Projects', desc:'Pick a job once — Scheduling, Site Time, Files, Site Diary, To-Do, Handover & Defects, Variations and Cost Tracker all follow it.', stat: `${totalHoursLogged} hr logged · ${handoverWarrantyCount} warranty item(s) · ${handoverOpenDefects} open defect(s) · ${totalDiaryEntries} diary entr${totalDiaryEntries===1?'y':'ies'} · ${openTodos} open task${openTodos===1?'':'s'}` },
-    { key:'schedule', icon:'📅', title:'Schedule', desc:'A week-view calendar for your day-to-day — gym, client calls, admin, anything — grouped under toggleable labels like Wilson Schedule.', stat: `${state.schedule.events.length} event(s) · ${state.schedule.labels.length} label${state.schedule.labels.length===1?'':'s'}` },
-    { key:'finance', icon:'💰', title:'Finance', desc:'Overhead audit, cash flow snapshot, job margin & risk, variations.', stat: `${formatCurrency(ovTotal)}/mo overhead · ${varCount} variation(s) pending` },
-    { key:'marketing', icon:'📈', title:'Marketing & Growth', desc:'Website/SEO, ad performance, referral tracking.', stat: `${state.marketing.referrals.length} referral source(s)` },
-    { key:'contacts', icon:'📇', title:'Contacts', desc:'Trade contacts by category, plus a supplier directory.', stat: `${tradeContactCount} trade contact(s) · ${state.contacts.suppliers.length} supplier(s)` }
-  ];
   main.innerHTML = `
     <div class="home-header">
       <h1>G'day — Bates Projects control centre</h1>
-      <p class="muted">Everything for running the business in one place. Click a card to open a section — all figures below are placeholders until you swap in the real numbers.</p>
-    </div>
-    <div class="card-grid">
-      ${cards.map(c=>`
-        <div class="nav-card" onclick="navigate('${c.key}')">
-          <div class="card-icon">${c.icon}</div>
-          <h3>${c.title}</h3>
-          <p>${c.desc}</p>
-          <div class="card-stat">${c.stat}</div>
-        </div>
-      `).join('')}
+      <p class="muted">Use the menu on the left to jump to any section.</p>
     </div>
     <div id="builder-todo-body"></div>
   `;
