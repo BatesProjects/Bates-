@@ -349,6 +349,12 @@
   .btd-text.btd-text-urgent{ color: var(--danger); font-weight:700; }
   .btd-urgency-select{ width:100%; }
   .btd-add-row{ display:grid; grid-template-columns: 1fr 150px auto; gap:10px; }
+  .btd-completed{ margin-top:16px; border-top:1px solid var(--border-soft); padding-top:12px; }
+  .btd-completed summary{ list-style:none; cursor:pointer; font-size:12.5px; font-weight:700; color:var(--text-dim); display:flex; align-items:center; gap:6px; }
+  .btd-completed summary::-webkit-details-marker{ display:none; }
+  .btd-completed summary::before{ content:'▸'; color:var(--text-faint); display:inline-block; transition: transform 0.15s; }
+  .btd-completed[open] summary::before{ transform: rotate(90deg); }
+  .btd-completed .btd-list{ margin-top:10px; margin-bottom:0; }
 
   footer.app-footer{ text-align:center; padding: 20px; color: var(--text-faint); font-size:11.5px; }
 
@@ -1470,31 +1476,18 @@ function renderBuilderTodoBody(){
 }
 function renderBuilderTodoPanel(){
   const tasks = state.builderTodos.tasks;
-  const open = tasks.filter(t=>!t.done).length;
-  const rows = tasks.map((t,i)=>{
-    const urgency = t.urgency || 'low';
-    return `
-      <div class="btd-row ${t.done?'is-done':''}">
-        <input type="checkbox" ${t.done?'checked':''} onchange="toggleBuilderTodo(${i})">
-        <span class="btd-bubble btd-bubble-${urgency}" title="${BUILDER_TODO_URGENCY_LABELS[urgency]}"></span>
-        <input type="text" class="btd-text ${!t.done && urgency==='urgent' ? 'btd-text-urgent':''}" placeholder="What needs doing?" data-path="builderTodos.tasks.${i}.text" value="${escapeHtml(t.text)}">
-        <select class="btd-urgency-select" onchange="setBuilderTodoUrgency(${i}, this.value)">
-          <option value="low" ${urgency==='low'?'selected':''}>Not important</option>
-          <option value="medium" ${urgency==='medium'?'selected':''}>Medium</option>
-          <option value="urgent" ${urgency==='urgent'?'selected':''}>Urgent</option>
-        </select>
-        <button type="button" class="icon-btn danger" title="Delete task" onclick="deleteBuilderTodo(${i})">✕</button>
-      </div>
-    `;
-  }).join('');
+  const indexed = tasks.map((t,i)=>({t,i}));
+  const openItems = indexed.filter(x=>!x.t.done);
+  const doneItems = indexed.filter(x=>x.t.done);
+  const rowsHtml = items => items.map(({t,i})=>renderBuilderTodoRow(t,i)).join('');
   return `
     <div class="panel">
       <div class="btd-head">
         <h3>Builder's To-Do List</h3>
-        <span class="btd-open-count">${open} open</span>
+        <span class="btd-open-count">${openItems.length} open</span>
       </div>
-      <p class="panel-desc">Your own day-to-day list — tick off what's done, and set an urgency so the important stuff stands out: green for not important, yellow for medium, red for urgent.</p>
-      <div class="btd-list">${rows || '<p class="muted">Nothing on the list — add your first task below.</p>'}</div>
+      <p class="panel-desc">Your own day-to-day list — tick off what's done and it moves into Completed Tasks below, so this list only ever shows what's still outstanding. Set an urgency so the important stuff stands out: green for not important, yellow for medium, red for urgent.</p>
+      <div class="btd-list">${rowsHtml(openItems) || '<p class="muted">Nothing outstanding — add your first task below.</p>'}</div>
       <div class="btd-add-row">
         <input type="text" id="btd-new-text" placeholder="Add a task..." onkeydown="if(event.key==='Enter') addBuilderTodo()">
         <select id="btd-new-urgency">
@@ -1504,6 +1497,28 @@ function renderBuilderTodoPanel(){
         </select>
         <button type="button" class="btn btn-primary btn-sm" onclick="addBuilderTodo()">+ Add</button>
       </div>
+      ${doneItems.length ? `
+        <details class="btd-completed">
+          <summary>Completed Tasks (${doneItems.length})</summary>
+          <div class="btd-list">${rowsHtml(doneItems)}</div>
+        </details>
+      ` : ''}
+    </div>
+  `;
+}
+function renderBuilderTodoRow(t, i){
+  const urgency = t.urgency || 'low';
+  return `
+    <div class="btd-row ${t.done?'is-done':''}">
+      <input type="checkbox" ${t.done?'checked':''} onchange="toggleBuilderTodo(${i})">
+      <span class="btd-bubble btd-bubble-${urgency}" title="${BUILDER_TODO_URGENCY_LABELS[urgency]}"></span>
+      <input type="text" class="btd-text ${!t.done && urgency==='urgent' ? 'btd-text-urgent':''}" placeholder="What needs doing?" data-path="builderTodos.tasks.${i}.text" value="${escapeHtml(t.text)}">
+      <select class="btd-urgency-select" onchange="setBuilderTodoUrgency(${i}, this.value)">
+        <option value="low" ${urgency==='low'?'selected':''}>Not important</option>
+        <option value="medium" ${urgency==='medium'?'selected':''}>Medium</option>
+        <option value="urgent" ${urgency==='urgent'?'selected':''}>Urgent</option>
+      </select>
+      <button type="button" class="icon-btn danger" title="Delete task" onclick="deleteBuilderTodo(${i})">✕</button>
     </div>
   `;
 }
