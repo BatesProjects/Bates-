@@ -13,6 +13,7 @@ import type {
 } from '../lib/types'
 
 export type ToolId = 'select' | 'pan' | 'calibrate' | 'area' | 'length' | 'count' | 'radius'
+export type Screen = 'dashboard' | 'takeoff'
 
 const MAX_HISTORY = 200
 
@@ -27,6 +28,9 @@ interface DraftState {
 const EMPTY_DRAFT: DraftState = { tool: null, sheetId: null, points: [], cursor: null }
 
 interface ProjectStoreState {
+  screen: Screen
+  goToDashboard: () => void
+
   project: Project | null
   past: Project[]
   future: Project[]
@@ -117,6 +121,9 @@ export function nextMeasurementLabel(project: Project, layerId: string, type: Me
 }
 
 export const useProjectStore = create<ProjectStoreState>((set, get) => ({
+  screen: 'dashboard',
+  goToDashboard: () => set({ screen: 'dashboard' }),
+
   project: null,
   past: [],
   future: [],
@@ -131,9 +138,31 @@ export const useProjectStore = create<ProjectStoreState>((set, get) => ({
   spaceHeld: false,
   setSpaceHeld: (held) => set({ spaceHeld: held }),
 
-  loadProject: (project) => set({ project, past: [], future: [], selectedMeasurementId: null, draft: EMPTY_DRAFT }),
+  loadProject: (project) =>
+    set({
+      project,
+      past: [],
+      future: [],
+      selectedMeasurementId: null,
+      draft: EMPTY_DRAFT,
+      views: {},
+      pendingCalibration: null,
+      activeTool: 'select',
+      screen: 'takeoff',
+    }),
 
-  newProject: (name) => set({ project: createProject(name), past: [], future: [], selectedMeasurementId: null, draft: EMPTY_DRAFT }),
+  newProject: (name) =>
+    set({
+      project: createProject(name),
+      past: [],
+      future: [],
+      selectedMeasurementId: null,
+      draft: EMPTY_DRAFT,
+      views: {},
+      pendingCalibration: null,
+      activeTool: 'select',
+      screen: 'takeoff',
+    }),
 
   renameProject: (name) =>
     set((s) => (s.project ? { project: touch({ ...s.project, name }) } : s)),

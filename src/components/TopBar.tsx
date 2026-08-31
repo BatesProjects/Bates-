@@ -1,34 +1,24 @@
-import { useRef, useState } from 'react'
-import { exportProjectJson, importProjectJson } from '../lib/exportImport'
+import { useState } from 'react'
+import { exportProjectJson } from '../lib/exportImport'
 import { exportWorkbook } from '../lib/exportXlsx'
 import { useProjectStore } from '../store/useProjectStore'
 
 export function TopBar() {
   const project = useProjectStore((s) => s.project)
   const renameProject = useProjectStore((s) => s.renameProject)
-  const loadProject = useProjectStore((s) => s.loadProject)
+  const goToDashboard = useProjectStore((s) => s.goToDashboard)
   const [editingName, setEditingName] = useState(false)
   const [nameDraft, setNameDraft] = useState('')
-  const fileInputRef = useRef<HTMLInputElement>(null)
 
   if (!project) return null
 
-  async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    e.target.value = ''
-    if (!file) return
-    try {
-      const imported = await importProjectJson(file)
-      loadProject(imported)
-    } catch (err) {
-      console.error(err)
-      alert('Could not import that project file.')
-    }
-  }
-
   return (
     <div className="flex h-11 shrink-0 items-center gap-3 border-b border-[#2a2d35] bg-[#191b21] px-3">
-      <div className="flex items-center gap-2 text-[#5b8def]">
+      <button
+        className="flex items-center gap-2 rounded px-1.5 py-1 text-[#5b8def] hover:bg-[#20232b]"
+        onClick={goToDashboard}
+        title="Back to all projects"
+      >
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
           <path
             d="M3 3h18v18H3V3zm4 4v10m10-10v10M3 12h18"
@@ -37,7 +27,17 @@ export function TopBar() {
           />
         </svg>
         <span className="font-semibold tracking-wide text-[#e4e7ec]">TAKEOFF</span>
-      </div>
+      </button>
+
+      <button
+        className="flex items-center gap-1 rounded px-2 py-1 text-xs text-[#8b93a3] hover:bg-[#20232b] hover:text-[#d7dae0]"
+        onClick={goToDashboard}
+      >
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+          <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        All projects
+      </button>
 
       <div className="mx-2 h-5 w-px bg-[#2a2d35]" />
 
@@ -70,14 +70,6 @@ export function TopBar() {
       )}
 
       <div className="flex-1" />
-
-      <button
-        className="rounded px-3 py-1.5 text-xs font-medium text-[#c7cbd4] hover:bg-[#20232b]"
-        onClick={() => fileInputRef.current?.click()}
-      >
-        Import project…
-      </button>
-      <input ref={fileInputRef} type="file" accept="application/json" hidden onChange={handleImport} />
 
       <button
         className="rounded px-3 py-1.5 text-xs font-medium text-[#c7cbd4] hover:bg-[#20232b]"

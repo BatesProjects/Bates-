@@ -1,35 +1,16 @@
-import { useEffect, useState } from 'react'
-import { ToolRail } from './components/ToolRail'
-import { ThumbnailSidebar } from './components/ThumbnailSidebar'
-import { RightPanel } from './components/RightPanel'
-import { StatusBar } from './components/StatusBar'
-import { SheetCanvas } from './canvas/SheetCanvas'
-import { CalibrationDialog } from './components/CalibrationDialog'
-import { EmptyProjectState } from './components/EmptyProjectState'
-import { TopBar } from './components/TopBar'
-import { loadActiveProject } from './lib/db'
-import { createProject } from './lib/project'
+import { useEffect } from 'react'
+import { Dashboard } from './components/Dashboard'
+import { TakeoffScreen } from './components/TakeoffScreen'
 import { initAutosave } from './store/persist'
 import { useProjectStore } from './store/useProjectStore'
 
 export default function App() {
+  const screen = useProjectStore((s) => s.screen)
   const project = useProjectStore((s) => s.project)
-  const loadProject = useProjectStore((s) => s.loadProject)
-  const [ready, setReady] = useState(false)
 
   useEffect(() => {
-    let cancelled = false
-    loadActiveProject().then((existing) => {
-      if (cancelled) return
-      loadProject(existing ?? createProject('Untitled Project'))
-      setReady(true)
-    })
     const unsubscribe = initAutosave()
-    return () => {
-      cancelled = true
-      unsubscribe()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return unsubscribe
   }, [])
 
   useEffect(() => {
@@ -41,6 +22,7 @@ export default function App() {
     function onKeyDown(e: KeyboardEvent) {
       if (isTyping(e)) return
       const store = useProjectStore.getState()
+      if (store.screen !== 'takeoff') return
 
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
         e.preventDefault()
@@ -113,33 +95,9 @@ export default function App() {
     }
   }, [])
 
-  if (!ready || !project) {
-    return (
-      <div className="flex h-screen w-screen items-center justify-center bg-[#14161b] text-[#8b93a3]">
-        Loading project…
-      </div>
-    )
+  if (screen === 'takeoff' && project) {
+    return <TakeoffScreen project={project} />
   }
 
-  const activeSheet = project.sheets.find((s) => s.id === project.activeSheetId) ?? null
-
-  return (
-    <div className="flex h-screen w-screen flex-col bg-[#14161b] text-[#d7dae0]">
-      <TopBar />
-      <div className="flex min-h-0 flex-1">
-        <ToolRail />
-        <ThumbnailSidebar />
-        <div className="relative flex min-w-0 flex-1 flex-col">
-          {activeSheet ? (
-            <SheetCanvas sheet={activeSheet} />
-          ) : (
-            <EmptyProjectState />
-          )}
-          <CalibrationDialog />
-        </div>
-        <RightPanel />
-      </div>
-      <StatusBar />
-    </div>
-  )
+  return <Dashboard />
 }

@@ -3,6 +3,8 @@
 //  - "blobs": sheet bitmap images, keyed by Sheet.imageBlobKey, kept out of
 //    the project JSON so the project can still be exported/imported as a
 //    reasonably small JSON file (images stay local-only, v1 tradeoff).
+// The app can hold any number of projects side by side — the dashboard lists
+// them all via listProjects(), and each is loaded/saved independently by id.
 import { type DBSchema, type IDBPDatabase, openDB } from 'idb'
 import type { Project } from './types'
 
@@ -15,15 +17,10 @@ interface TakeoffDB extends DBSchema {
     key: string
     value: Blob
   }
-  meta: {
-    key: string
-    value: string
-  }
 }
 
 const DB_NAME = 'takeoff-db'
 const DB_VERSION = 1
-const ACTIVE_PROJECT_KEY = 'activeProjectId'
 
 let dbPromise: Promise<IDBPDatabase<TakeoffDB>> | null = null
 
@@ -37,9 +34,6 @@ function getDb(): Promise<IDBPDatabase<TakeoffDB>> {
         if (!db.objectStoreNames.contains('blobs')) {
           db.createObjectStore('blobs')
         }
-        if (!db.objectStoreNames.contains('meta')) {
-          db.createObjectStore('meta')
-        }
       },
     })
   }
@@ -49,18 +43,10 @@ function getDb(): Promise<IDBPDatabase<TakeoffDB>> {
 export async function saveProject(project: Project): Promise<void> {
   const db = await getDb()
   await db.put('projects', project)
-  await db.put('meta', project.id, ACTIVE_PROJECT_KEY)
 }
 
 export async function loadProject(id: string): Promise<Project | undefined> {
   const db = await getDb()
-  return db.get('projects', id)
-}
-
-export async function loadActiveProject(): Promise<Project | undefined> {
-  const db = await getDb()
-  const id = await db.get('meta', ACTIVE_PROJECT_KEY)
-  if (!id) return undefined
   return db.get('projects', id)
 }
 
@@ -69,8 +55,15 @@ export async function listProjects(): Promise<Project[]> {
   return db.getAll('projects')
 }
 
-export async function deleteProject(id: string): Promise<void> {
+/** Deletes a project and every sheet image blob it owns, so nothing orphaned is left behind. */
+export async function deleteProjectAndBlobs(id: string): Promise<void> {
   const db = await getDb()
+  const project = await db.get('projects', id)
+  if (project) {
+    const tx = db.transaction('blobs', 'readwrite')
+    await Promise.all(project.sheets.map((sheet) => tx.store.delete(sheet.imageBlobKey)))
+    await tx.done
+  }
   await db.delete('projects', id)
 }
 
