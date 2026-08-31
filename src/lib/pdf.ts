@@ -1,7 +1,11 @@
 import * as pdfjsLib from 'pdfjs-dist'
-import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
+// Imported as raw source (not a URL) so the worker ships embedded inside the
+// single-file HTML build instead of as a separate .mjs the browser can't
+// fetch when the app is opened directly from disk (no server).
+import pdfWorkerSource from 'pdfjs-dist/build/pdf.worker.min.mjs?raw'
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
+const workerBlobUrl = URL.createObjectURL(new Blob([pdfWorkerSource], { type: 'text/javascript' }))
+pdfjsLib.GlobalWorkerOptions.workerSrc = workerBlobUrl
 
 /** Render resolution for PDF pages. Higher = crisper zoom-in, larger blobs. */
 const RENDER_SCALE = 2.5
