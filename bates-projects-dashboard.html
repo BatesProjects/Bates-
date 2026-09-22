@@ -238,6 +238,11 @@
   .stat-card{ background: var(--bg-input); border:1px solid var(--border-soft); border-radius: var(--radius-sm); padding:14px; }
   .stat-label{ font-size:11px; text-transform:uppercase; letter-spacing:0.03em; color:var(--text-faint); font-weight:700; margin-bottom:6px; }
   .stat-value{ font-size:20px; font-weight:800; color: var(--accent); }
+  .stat-input{ font-size:20px; font-weight:800; color: var(--accent); background:transparent; border:1px solid transparent; padding:0; width:100%; font-family:inherit; }
+  .stat-input:hover{ border-color: var(--border); }
+  .stat-input:focus{ border-color: var(--accent); }
+  .ct-profit-positive{ color: var(--success); }
+  .ct-profit-negative{ color: var(--danger); }
 
   /* ---------- Bars (overhead breakdown) ---------- */
   .bar-list{ display:flex; flex-direction:column; gap:10px; }
@@ -898,6 +903,8 @@ function loadState(){
       (log.employees||[]).forEach(r => { if(r.paid === undefined) r.paid = false; });
       (log.trades||[]).forEach(r => { if(r.rate === undefined) r.rate = 0; if(r.paid === undefined) r.paid = false; });
     });
+    // Cost Tracker logs saved before the Total Job Quote field existed won't have `quoteValue`.
+    Object.values(merged.costTracker.logs).forEach(log => { if(log.quoteValue === undefined) log.quoteValue = 0; });
     // Site Diary saved before the per-job split was two flat top-level arrays — keep that data as the "general" (not job-specific) bucket.
     if(Array.isArray(merged.siteDiary.dailyEntries)){
       merged.siteDiary.logs.general.dailyEntries = merged.siteDiary.dailyEntries;
@@ -1268,6 +1275,9 @@ function renderCell(col, row, i, path){
   if(col.type === 'number'){
     return `<input type="number" step="any" data-path="${p}" value="${val===undefined||val===''?'':val}">`;
   }
+  if(col.type === 'money'){
+    return `<input type="text" inputmode="decimal" data-money="true" data-path="${p}" value="${val===undefined||val===''?'':val}" placeholder="0">`;
+  }
   if(col.type === 'date'){
     return renderDatePickerField({ path: p, value: val });
   }
@@ -1322,12 +1332,23 @@ function renderJournal(path, options={}){
 /* ---------------------------------------------------------------
    6. LIVE INPUT BINDING (delegated) + computed summary refresh
 --------------------------------------------------------------- */
+/* Money fields are plain text inputs (not type=number) specifically so typing
+   "$1,200" or "1,200.50" works — a native number input silently rejects the
+   comma keystroke outright, which was quietly truncating/zeroing amounts. */
+function parseMoneyInput(str){
+  if(str === null || str === undefined) return '';
+  const cleaned = String(str).replace(/[^0-9.\-]/g,'');
+  if(cleaned === '' || cleaned === '-') return '';
+  const num = Number(cleaned);
+  return isNaN(num) ? '' : num;
+}
 function handleInput(e){
   const target = e.target;
   const path = target.dataset ? target.dataset.path : null;
   if(!path) return;
   let val;
   if(target.type === 'checkbox') val = target.checked;
+  else if(target.dataset.money === 'true') val = parseMoneyInput(target.value);
   else if(target.type === 'number') val = target.value === '' ? '' : Number(target.value);
   else val = target.value;
   setPath(state, path, val);
@@ -1336,6 +1357,11 @@ function handleInput(e){
   if(target.tagName === 'SELECT' && target.dataset.pill === 'true'){
     target.classList.remove('pill-success','pill-warning','pill-danger','pill-neutral');
     target.classList.add(statusClass(val));
+  }
+  // Normalize the money field's display back to a clean number once the user
+  // moves on (not mid-keystroke) — visible confirmation that "$1,200" etc. parsed correctly.
+  if(target.dataset.money === 'true' && e.type === 'change'){
+    target.value = val === '' ? '' : val;
   }
   refreshComputedForPath(path);
   updateAllComputedSummaries();
@@ -1396,9 +1422,17 @@ function updateAllComputedSummaries(){
     const ctLog = state.costTracker.logs[varScope];
     const tradesTotal = ctLog.trades.reduce((s,r)=>s+(Number(r.amount)||0),0);
     const materialsTotal = ctLog.materials.reduce((s,r)=>s+(Number(r.amount)||0),0);
+    const totalCost = tradesTotal + materialsTotal;
+    const profit = (Number(ctLog.quoteValue)||0) - totalCost;
     setText('ct-trades-total', formatCurrency(tradesTotal));
     setText('ct-materials-total', formatCurrency(materialsTotal));
-    setText('ct-grand-total', formatCurrency(tradesTotal + materialsTotal));
+    setText('ct-grand-total', formatCurrency(totalCost));
+    const profitEl = document.getElementById('ct-profit');
+    if(profitEl){
+      profitEl.textContent = formatSignedCurrency(profit);
+      profitEl.classList.toggle('ct-profit-positive', profit >= 0);
+      profitEl.classList.toggle('ct-profit-negative', profit < 0);
+    }
   }
 }
 /* Live-refreshes the Site Time stat cards + per-week Amount Owed spans as hours/rate
@@ -2547,7 +2581,14 @@ function renderVariationCard(scope, v, idx){
    the top so you always know where spend stands.
 --------------------------------------------------------------- */
 function ensureCostTrackerLog(scope){
-  if(!state.costTracker.logs[scope]) state.costTracker.logs[scope] = { trades: [], materials: [] };
+  if(!state.costTracker.logs[scope]){
+    let quoteValue = 0;
+    if(scope.startsWith('job:')){
+      const job = state.pipeline.activeJobs.find(j=>j.id===scope.slice(4));
+      if(job) quoteValue = Number(job.value)||0;
+    }
+    state.costTracker.logs[scope] = { trades: [], materials: [], quoteValue };
+  }
 }
 function renderCostTrackerTab(){
   const scope = state.projects.selectedScope;
@@ -2559,14 +2600,21 @@ function renderCostTrackerTab(){
   const tradeOptions = state.contacts.trades.map(t=>t.category).filter(Boolean);
   const tradesTotal = log.trades.reduce((s,r)=>s+(Number(r.amount)||0),0);
   const materialsTotal = log.materials.reduce((s,r)=>s+(Number(r.amount)||0),0);
+  const totalCost = tradesTotal + materialsTotal;
+  const profit = (Number(log.quoteValue)||0) - totalCost;
   return `
     <div class="panel">
       <h3>Cost Tracker</h3>
-      <p class="panel-desc">Log every trade and material cost against this job as it comes in, so you always know where spend stands.</p>
+      <p class="panel-desc">Log every trade and material cost against this job as it comes in, set the total job quote, and see your profit update as costs come in.</p>
       <div class="stat-row">
+        <div class="stat-card">
+          <div class="stat-label">Total Job Quote</div>
+          <input type="text" inputmode="decimal" class="stat-input" data-money="true" data-path="costTracker.logs.${scope}.quoteValue" value="${log.quoteValue===undefined||log.quoteValue===''?'':log.quoteValue}" placeholder="0">
+        </div>
         <div class="stat-card"><div class="stat-label">Trades</div><div class="stat-value" id="ct-trades-total">${formatCurrency(tradesTotal)}</div></div>
         <div class="stat-card"><div class="stat-label">Materials</div><div class="stat-value" id="ct-materials-total">${formatCurrency(materialsTotal)}</div></div>
-        <div class="stat-card"><div class="stat-label">Total Cost</div><div class="stat-value" id="ct-grand-total">${formatCurrency(tradesTotal + materialsTotal)}</div></div>
+        <div class="stat-card"><div class="stat-label">Total Cost</div><div class="stat-value" id="ct-grand-total">${formatCurrency(totalCost)}</div></div>
+        <div class="stat-card"><div class="stat-label">Builder's Profit</div><div class="stat-value ${profit>=0?'ct-profit-positive':'ct-profit-negative'}" id="ct-profit">${formatSignedCurrency(profit)}</div></div>
       </div>
     </div>
     <div class="panel">
@@ -2575,7 +2623,7 @@ function renderCostTrackerTab(){
         { field:'date', label:'Date', type:'date' },
         { field:'trade', label:'Trade', type: tradeOptions.length ? 'select' : 'text', options: tradeOptions },
         { field:'supplier', label:'Supplier / Subcontractor', type:'text' },
-        { field:'amount', label:'Amount ($)', type:'number' },
+        { field:'amount', label:'Amount ($)', type:'money' },
         { field:'notes', label:'Notes', type:'textarea' }
       ], { addLabel:'+ Add trade cost' })}
     </div>
@@ -2585,7 +2633,7 @@ function renderCostTrackerTab(){
         { field:'date', label:'Date', type:'date' },
         { field:'item', label:'Item / Description', type:'text' },
         { field:'supplier', label:'Supplier', type:'text' },
-        { field:'amount', label:'Amount ($)', type:'number' },
+        { field:'amount', label:'Amount ($)', type:'money' },
         { field:'notes', label:'Notes', type:'textarea' }
       ], { addLabel:'+ Add material cost' })}
     </div>
