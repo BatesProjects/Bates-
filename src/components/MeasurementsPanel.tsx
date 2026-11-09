@@ -135,17 +135,29 @@ function ResultRow({ result }: { result: MeasurementResult }) {
 
 export function MeasurementsPanel() {
   const project = useProjectStore((s) => s.project)
+  const toggleLayerCollapsed = useProjectStore((s) => s.toggleLayerCollapsed)
+  const setAllLayersCollapsed = useProjectStore((s) => s.setAllLayersCollapsed)
   if (!project) return null
 
   const summary = buildSummary(project)
   const gt = summary.grandTotals
+  const nonEmptyLayers = summary.layers.filter((ls) => ls.results.length > 0)
+  const anyExpanded = nonEmptyLayers.some((ls) => !ls.layer.collapsed)
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="border-b border-[#2a2d35] px-3 py-2">
+      <div className="flex items-center justify-between border-b border-[#2a2d35] px-3 py-2">
         <span className="text-[11px] font-semibold uppercase tracking-wide text-[#6d7686]">
           Takeoff summary
         </span>
+        {nonEmptyLayers.length > 1 && (
+          <button
+            onClick={() => setAllLayersCollapsed(anyExpanded)}
+            className="text-[10px] text-[#6d7686] hover:text-[#c7cbd4]"
+          >
+            {anyExpanded ? 'Collapse all' : 'Expand all'}
+          </button>
+        )}
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
@@ -158,8 +170,21 @@ export function MeasurementsPanel() {
           (ls) =>
             ls.results.length > 0 && (
               <div key={ls.layer.id} className="mb-3">
-                <div className="mb-1 flex items-center gap-1.5 px-0.5">
-                  <span className="h-2 w-2 rounded-full" style={{ backgroundColor: ls.layer.color }} />
+                <button
+                  onClick={() => toggleLayerCollapsed(ls.layer.id)}
+                  className="mb-1 flex w-full items-center gap-1.5 rounded px-0.5 py-0.5 text-left hover:bg-[#1c1f27]"
+                  title={ls.layer.collapsed ? 'Expand layer' : 'Collapse layer'}
+                >
+                  <svg
+                    width="10"
+                    height="10"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    className={`shrink-0 text-[#6d7686] transition-transform ${ls.layer.collapsed ? '-rotate-90' : ''}`}
+                  >
+                    <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: ls.layer.color }} />
                   <span className="text-[11px] font-medium text-[#c7cbd4]">{ls.layer.name}</span>
                   <span className="flex-1" />
                   <span className="text-[10px] text-[#6d7686]">
@@ -168,12 +193,14 @@ export function MeasurementsPanel() {
                     {ls.totals.volumeM3 > 0 && `${fmt(ls.totals.volumeM3)} m³ `}
                     {ls.totals.count > 0 && `${ls.totals.count} no.`}
                   </span>
-                </div>
-                <div className="flex flex-col gap-0.5">
-                  {ls.results.map((r) => (
-                    <ResultRow key={r.measurement.id} result={r} />
-                  ))}
-                </div>
+                </button>
+                {!ls.layer.collapsed && (
+                  <div className="flex flex-col gap-0.5">
+                    {ls.results.map((r) => (
+                      <ResultRow key={r.measurement.id} result={r} />
+                    ))}
+                  </div>
+                )}
               </div>
             ),
         )}

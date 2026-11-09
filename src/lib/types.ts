@@ -42,6 +42,8 @@ export interface Layer {
   visible: boolean
   locked: boolean
   order: number
+  /** Whether this layer's measurement rows are collapsed in the takeoff summary panel. Undefined = expanded. */
+  collapsed?: boolean
 }
 
 export type MeasurementType = 'area' | 'length' | 'count' | 'radius'

@@ -66,6 +66,8 @@ interface ProjectStoreState {
   setLayerColor: (layerId: string, color: string) => void
   toggleLayerVisible: (layerId: string) => void
   toggleLayerLocked: (layerId: string) => void
+  toggleLayerCollapsed: (layerId: string) => void
+  setAllLayersCollapsed: (collapsed: boolean) => void
   removeLayer: (layerId: string) => void
   setActiveLayer: (layerId: string) => void
 
@@ -242,6 +244,33 @@ export const useProjectStore = create<ProjectStoreState>((set, get) => ({
       ...p,
       layers: p.layers.map((l) => (l.id === layerId ? { ...l, locked: !l.locked } : l)),
     })),
+
+  // Collapse state is purely a takeoff-summary display preference, not a
+  // measurement edit — kept off the undo stack so Ctrl+Z never un-collapses
+  // a layer the user tidied away, but still saved with the project.
+  toggleLayerCollapsed: (layerId) =>
+    set((s) =>
+      s.project
+        ? {
+            project: touch({
+              ...s.project,
+              layers: s.project.layers.map((l) => (l.id === layerId ? { ...l, collapsed: !l.collapsed } : l)),
+            }),
+          }
+        : s,
+    ),
+
+  setAllLayersCollapsed: (collapsed) =>
+    set((s) =>
+      s.project
+        ? {
+            project: touch({
+              ...s.project,
+              layers: s.project.layers.map((l) => ({ ...l, collapsed })),
+            }),
+          }
+        : s,
+    ),
 
   removeLayer: (layerId) =>
     commit(set, get, (p) => {
