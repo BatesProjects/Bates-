@@ -1,48 +1,28 @@
 import { saveProject } from '../lib/db'
-import type { Project } from '../lib/types'
 import { useProjectStore } from './useProjectStore'
 
-const AUTOSAVE_DEBOUNCE_MS = 600
-
-let saveTimer: ReturnType<typeof setTimeout> | null = null
-let pendingProject: Project | null = null
-
-function flushPending() {
-  if (saveTimer) {
-    clearTimeout(saveTimer)
-    saveTimer = null
-  }
-  if (pendingProject) {
-    const project = pendingProject
-    pendingProject = null
-    saveProject(project).catch((err) => {
-      console.error('Failed to autosave project', err)
-    })
-  }
-}
-
-/** Call once at app startup. Debounces writes to IndexedDB whenever the project changes. */
+/**
+ * Call once at app startup. Saves to IndexedDB immediately whenever the
+ * project changes.
+ *
+ * This used to debounce saves by 600ms, but every store action that touches
+ * `project` is already a single discrete user action (draft/cursor/view
+ * state live outside `project` and don't trigger this), so there was never
+ * a high-frequency write to protect against -- only a window in which a
+ * closed tab or reload could lose the most recent edit. Browsers don't
+ * reliably let async work (IndexedDB included) finish inside a
+ * 'beforeunload' handler, so debouncing plus a last-ditch unload flush
+ * wasn't actually safe. Saving on every change removes the risk window
+ * almost entirely instead of just papering over it.
+ */
 export function initAutosave(): () => void {
   let lastProjectRef: unknown = null
   const unsubscribe = useProjectStore.subscribe((state) => {
     if (!state.project || state.project === lastProjectRef) return
     lastProjectRef = state.project
-
-    // If the user switches to a *different* project (dashboard nav) while an
-    // edit to the previous one is still debouncing, flush it immediately
-    // instead of silently dropping it when the timer below is cleared.
-    if (pendingProject && pendingProject.id !== state.project.id) {
-      flushPending()
-    }
-
-    pendingProject = state.project
-    if (saveTimer) clearTimeout(saveTimer)
-    saveTimer = setTimeout(flushPending, AUTOSAVE_DEBOUNCE_MS)
+    saveProject(state.project).catch((err) => {
+      console.error('Failed to autosave project', err)
+    })
   })
-
-  window.addEventListener('beforeunload', flushPending)
-  return () => {
-    unsubscribe()
-    window.removeEventListener('beforeunload', flushPending)
-  }
+  return unsubscribe
 }

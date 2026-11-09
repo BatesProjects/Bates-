@@ -1,4 +1,5 @@
 import { formatScaleReadout } from '../lib/coords'
+import { formatScaleRatio } from '../lib/scales'
 import { useProjectStore } from '../store/useProjectStore'
 
 export function StatusBar() {
@@ -11,14 +12,13 @@ export function StatusBar() {
   const view = activeSheet ? views[activeSheet.id] : undefined
   const zoomPct = view ? Math.round(view.scale * 100) : 100
   const ppm = activeSheet?.calibration?.pixelsPerMetre ?? 0
+  const scaleRatio = activeSheet?.calibration?.scaleRatio
+  const scaleText = scaleRatio ? `${formatScaleRatio(scaleRatio)} (${formatScaleReadout(ppm)})` : formatScaleReadout(ppm)
 
   return (
     <div className="flex h-6 shrink-0 items-center gap-4 border-t border-[#2a2d35] bg-[#191b21] px-3 text-[11px] text-[#8b93a3]">
       <span>
-        Scale:{' '}
-        <span className={ppm ? 'text-[#c7cbd4]' : 'text-[#e8a53d]'}>
-          {activeSheet ? formatScaleReadout(ppm) : '—'}
-        </span>
+        Scale: <span className={ppm ? 'text-[#c7cbd4]' : 'text-[#e8a53d]'}>{activeSheet ? scaleText : '—'}</span>
       </span>
       <span>Zoom: {zoomPct}%</span>
       <span>

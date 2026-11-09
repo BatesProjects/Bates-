@@ -10,6 +10,14 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = workerBlobUrl
 /** Render resolution for PDF pages. Higher = crisper zoom-in, larger blobs. */
 const RENDER_SCALE = 2.5
 
+/**
+ * PDF pages are always 72 points/inch by spec, so at RENDER_SCALE our
+ * rendered bitmap is exactly RENDER_SCALE * 72 pixels per inch of the
+ * *plotted page* — this is what lets the calibration dialog offer "this
+ * sheet is plotted at 1:100" presets with no clicking required.
+ */
+export const PDF_SOURCE_DPI = RENDER_SCALE * 72
+
 export interface RenderedPage {
   pageNumber: number
   canvas: HTMLCanvasElement

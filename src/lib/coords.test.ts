@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   computePixelsPerMetre,
   distance,
+  findSnapTarget,
   polygonAreaPx2,
   polygonPerimeterPx,
   polylineLengthPx,
@@ -9,9 +10,11 @@ import {
   pxToM,
   screenToSheet,
   sheetToScreen,
+  snapToAngle,
   zoomAroundScreenPoint,
   type ViewTransform,
 } from './coords'
+import { pixelsPerMetreForScale } from './scales'
 
 describe('screen <-> sheet round trip', () => {
   it('round-trips a point through an arbitrary view transform', () => {
@@ -146,5 +149,79 @@ describe('calibration unit handling', () => {
     )
     expect(ppmFromMetres).toBeCloseTo(ppmFromMillimetres, 9)
     expect(ppmFromMetres).toBeCloseTo(100, 9)
+  })
+})
+
+describe('snapToAngle', () => {
+  it('snaps a near-horizontal segment exactly onto 0°', () => {
+    const from = { x: 100, y: 100 }
+    const to = { x: 300, y: 104 } // almost horizontal, slight downward drift
+    const snapped = snapToAngle(from, to)
+    expect(snapped.y).toBeCloseTo(from.y, 6)
+    expect(distance(from, snapped)).toBeCloseTo(distance(from, to), 6)
+  })
+
+  it('snaps a near-vertical segment exactly onto 90°', () => {
+    const from = { x: 50, y: 50 }
+    const to = { x: 53, y: 250 }
+    const snapped = snapToAngle(from, to)
+    expect(snapped.x).toBeCloseTo(from.x, 6)
+  })
+
+  it('snaps a roughly-diagonal segment onto 45°', () => {
+    const from = { x: 0, y: 0 }
+    const to = { x: 103, y: 97 } // close to a true 45° line
+    const snapped = snapToAngle(from, to)
+    expect(snapped.x).toBeCloseTo(snapped.y, 6)
+  })
+
+  it('preserves distance exactly regardless of angle', () => {
+    const from = { x: 10, y: 10 }
+    const to = { x: 37, y: 61 }
+    const originalDist = distance(from, to)
+    const snapped = snapToAngle(from, to)
+    expect(distance(from, snapped)).toBeCloseTo(originalDist, 9)
+  })
+})
+
+describe('findSnapTarget', () => {
+  const candidates = [
+    { x: 0, y: 0 },
+    { x: 500, y: 500 },
+    { x: 100, y: 100 },
+  ]
+
+  it('returns the nearest candidate within the radius', () => {
+    const found = findSnapTarget({ x: 103, y: 98 }, candidates, 10)
+    expect(found).toEqual({ x: 100, y: 100 })
+  })
+
+  it('returns null when nothing is within the radius', () => {
+    const found = findSnapTarget({ x: 250, y: 250 }, candidates, 10)
+    expect(found).toBeNull()
+  })
+
+  it('picks the closest of several candidates within range', () => {
+    const found = findSnapTarget({ x: 2, y: 2 }, candidates, 200)
+    expect(found).toEqual({ x: 0, y: 0 })
+  })
+})
+
+describe('pixelsPerMetreForScale (preset architectural scales)', () => {
+  it('matches the known PDF constant: 1:100 at 180dpi', () => {
+    // 180 dpi comes from RENDER_SCALE(2.5) * 72 points/inch, per pdf.ts.
+    const ppm = pixelsPerMetreForScale(100, 180)
+    expect(ppm).toBeCloseTo(70.8661, 3)
+  })
+
+  it('halving the scale ratio halves pixelsPerMetre', () => {
+    const ppm50 = pixelsPerMetreForScale(50, 180)
+    const ppm100 = pixelsPerMetreForScale(100, 180)
+    expect(ppm50).toBeCloseTo(ppm100 * 2, 6)
+  })
+
+  it('a 1:1 plot at 180dpi equals 180/0.0254 px per metre', () => {
+    const ppm = pixelsPerMetreForScale(1, 180)
+    expect(ppm).toBeCloseTo(180 / 0.0254, 6)
   })
 })

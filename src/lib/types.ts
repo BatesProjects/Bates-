@@ -17,6 +17,8 @@ export interface Calibration {
   /** Derived: pixels per metre, at the sheet's native (unscaled) pixel resolution. */
   pixelsPerMetre: number
   calibratedAt: string
+  /** Set when calibrated from a preset architectural scale (e.g. 100 for "1:100") rather than two clicked points. */
+  scaleRatio?: number
 }
 
 export interface Sheet {
@@ -32,6 +34,14 @@ export interface Sheet {
   imageBlobKey: string
   calibration: Calibration | null
   createdAt: string
+  /**
+   * Pixels-per-inch this sheet was rendered at, when known precisely (PDF
+   * pages, via their fixed 72pt/inch convention and our render scale).
+   * Lets the calibration dialog offer "this sheet is plotted at 1:100"
+   * presets without any clicking. Undefined for uploaded images, whose
+   * real-world print scale we have no reliable way to know.
+   */
+  sourceDpi?: number
 }
 
 export interface Layer {

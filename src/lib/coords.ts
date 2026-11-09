@@ -133,3 +133,44 @@ export function formatScaleReadout(pixelsPerMetre: number): string {
   const mmPerPixel = 1000 / pixelsPerMetre
   return `1px ≈ ${mmPerPixel.toFixed(2)}mm`
 }
+
+// ---------------------------------------------------------------------------
+// Drawing aids: angle-lock and point-snap. Both operate purely on sheet-space
+// points so the same resolved point is used for the live preview and the
+// point actually committed when the user clicks.
+// ---------------------------------------------------------------------------
+
+const ANGLE_STEP_RAD = Math.PI / 4 // 45°
+
+/** Snaps the direction from `from` to `to` onto the nearest 45° increment, keeping the distance. */
+export function snapToAngle(from: Point, to: Point): Point {
+  const dx = to.x - from.x
+  const dy = to.y - from.y
+  const dist = Math.hypot(dx, dy)
+  if (dist === 0) return to
+  const angle = Math.atan2(dy, dx)
+  const snappedAngle = Math.round(angle / ANGLE_STEP_RAD) * ANGLE_STEP_RAD
+  return {
+    x: from.x + dist * Math.cos(snappedAngle),
+    y: from.y + dist * Math.sin(snappedAngle),
+  }
+}
+
+/**
+ * Finds the closest candidate point within `radiusSheetPx` of `point`, or
+ * null if none qualifies. Candidates and the search radius are both in
+ * sheet-space pixels — convert a screen-pixel threshold via the view scale
+ * before calling.
+ */
+export function findSnapTarget(point: Point, candidates: Point[], radiusSheetPx: number): Point | null {
+  let best: Point | null = null
+  let bestDist = radiusSheetPx
+  for (const candidate of candidates) {
+    const d = distance(point, candidate)
+    if (d <= bestDist) {
+      best = candidate
+      bestDist = d
+    }
+  }
+  return best
+}

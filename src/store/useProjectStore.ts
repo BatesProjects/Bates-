@@ -12,7 +12,7 @@ import type {
   Sheet,
 } from '../lib/types'
 
-export type ToolId = 'select' | 'pan' | 'calibrate' | 'area' | 'length' | 'count' | 'radius'
+export type ToolId = 'select' | 'pan' | 'calibrate' | 'verify' | 'area' | 'length' | 'count' | 'radius'
 export type Screen = 'dashboard' | 'takeoff'
 
 const MAX_HISTORY = 200
@@ -42,6 +42,14 @@ interface ProjectStoreState {
   views: Record<string, ViewTransform>
   /** Set while the calibration dialog is open, holding the two clicked points. */
   pendingCalibration: { sheetId: string; pointA: Point; pointB: Point } | null
+  /** True when the calibration tool should show its "pick a method" chooser rather than wait for two clicks. */
+  calibrationChooserOpen: boolean
+  openCalibrationChooser: () => void
+  closeCalibrationChooser: () => void
+  /** Set after two clicks with the Verify Scale tool, holding the points to check against the known distance the user enters. */
+  pendingVerify: { sheetId: string; pointA: Point; pointB: Point } | null
+  startVerifyPoints: (sheetId: string, pointA: Point, pointB: Point) => void
+  clearPendingVerify: () => void
   /** Live cursor position in sheet space, for the status bar readout. */
   hoverPoint: Point | null
   setHoverPoint: (point: Point | null) => void
@@ -135,6 +143,12 @@ export const useProjectStore = create<ProjectStoreState>((set, get) => ({
   draft: EMPTY_DRAFT,
   views: {},
   pendingCalibration: null,
+  calibrationChooserOpen: false,
+  openCalibrationChooser: () => set({ calibrationChooserOpen: true }),
+  closeCalibrationChooser: () => set({ calibrationChooserOpen: false }),
+  pendingVerify: null,
+  startVerifyPoints: (sheetId, pointA, pointB) => set({ pendingVerify: { sheetId, pointA, pointB } }),
+  clearPendingVerify: () => set({ pendingVerify: null }),
   hoverPoint: null,
   setHoverPoint: (point) => set({ hoverPoint: point }),
   spaceHeld: false,
@@ -149,6 +163,8 @@ export const useProjectStore = create<ProjectStoreState>((set, get) => ({
       draft: EMPTY_DRAFT,
       views: {},
       pendingCalibration: null,
+      calibrationChooserOpen: false,
+      pendingVerify: null,
       activeTool: 'select',
       screen: 'takeoff',
     }),
@@ -162,6 +178,8 @@ export const useProjectStore = create<ProjectStoreState>((set, get) => ({
       draft: EMPTY_DRAFT,
       views: {},
       pendingCalibration: null,
+      calibrationChooserOpen: false,
+      pendingVerify: null,
       activeTool: 'select',
       screen: 'takeoff',
     }),
@@ -335,7 +353,15 @@ export const useProjectStore = create<ProjectStoreState>((set, get) => ({
   // Tool / draft state — deliberately outside the undo stack. Only the
   // final commitDraft() call produces a history entry.
   // ------------------------------------------------------------------
-  setActiveTool: (tool) => set({ activeTool: tool, draft: EMPTY_DRAFT, selectedMeasurementId: null }),
+  setActiveTool: (tool) =>
+    set({
+      activeTool: tool,
+      draft: EMPTY_DRAFT,
+      selectedMeasurementId: null,
+      calibrationChooserOpen: tool === 'calibrate',
+      pendingCalibration: null,
+      pendingVerify: null,
+    }),
 
   beginDraft: (tool, sheetId, firstPoint) =>
     set({ draft: { tool, sheetId, points: [firstPoint], cursor: firstPoint } }),

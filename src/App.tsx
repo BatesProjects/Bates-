@@ -47,6 +47,9 @@ export default function App() {
         case 'Escape':
           store.cancelDraft()
           store.clearPendingCalibration()
+          store.clearPendingVerify()
+          store.closeCalibrationChooser()
+          if (store.activeTool === 'calibrate' || store.activeTool === 'verify') store.setActiveTool('select')
           break
         case 'Enter':
           store.commitDraft()

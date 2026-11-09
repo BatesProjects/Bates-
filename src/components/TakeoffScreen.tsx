@@ -5,6 +5,7 @@ import { StatusBar } from './StatusBar'
 import { ThumbnailSidebar } from './ThumbnailSidebar'
 import { ToolRail } from './ToolRail'
 import { TopBar } from './TopBar'
+import { VerifyScaleDialog } from './VerifyScaleDialog'
 import { SheetCanvas } from '../canvas/SheetCanvas'
 import type { Project } from '../lib/types'
 
@@ -20,6 +21,7 @@ export function TakeoffScreen({ project }: { project: Project }) {
         <div className="relative flex min-w-0 flex-1 flex-col">
           {activeSheet ? <SheetCanvas sheet={activeSheet} /> : <EmptyProjectState />}
           <CalibrationDialog />
+          <VerifyScaleDialog />
         </div>
         <RightPanel />
       </div>

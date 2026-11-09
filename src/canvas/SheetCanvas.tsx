@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { Image as KonvaImage, Layer as KonvaLayer, Stage } from 'react-konva'
 import type Konva from 'konva'
-import { IDENTITY_VIEW, screenToSheet, zoomAroundScreenPoint } from '../lib/coords'
+import { IDENTITY_VIEW, findSnapTarget, screenToSheet, snapToAngle, zoomAroundScreenPoint } from '../lib/coords'
 import type { Measurement, Point, Sheet } from '../lib/types'
 import { useProjectStore } from '../store/useProjectStore'
 import { DraftPreview } from './DraftPreview'
@@ -20,6 +20,8 @@ const WHEEL_SCALE_STEP = 1.08
 // clicks to also be near the same screen position.
 const DOUBLE_CLICK_MS = 350
 const DOUBLE_CLICK_DIST_PX = 6
+/** How close (in screen pixels) the cursor needs to be to an existing vertex to snap onto it. */
+const SNAP_SCREEN_PX = 12
 
 function clamp(v: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, v))
@@ -46,6 +48,17 @@ function buildCountIndex(measurements: Measurement[]): Map<string, number> {
   return index
 }
 
+/** Every vertex on the sheet a new point might want to snap onto: other measurements' points, plus the current draft's own. */
+function collectSnapCandidates(measurements: Measurement[], draftPoints: Point[]): Point[] {
+  const points: Point[] = [...draftPoints]
+  for (const m of measurements) {
+    if (m.type === 'area' || m.type === 'length') points.push(...m.points)
+    else if (m.type === 'radius') points.push(m.center)
+    else if (m.type === 'count') points.push(m.point)
+  }
+  return points
+}
+
 export function SheetCanvas({ sheet }: { sheet: Sheet }) {
   const { ref: containerRef, size } = useElementSize<HTMLDivElement>()
   const image = useSheetImage(sheet.imageBlobKey)
@@ -63,10 +76,13 @@ export function SheetCanvas({ sheet }: { sheet: Sheet }) {
   const cancelDraft = useProjectStore((s) => s.cancelDraft)
   const addCountMarker = useProjectStore((s) => s.addCountMarker)
   const startCalibrationPoints = useProjectStore((s) => s.startCalibrationPoints)
+  const startVerifyPoints = useProjectStore((s) => s.startVerifyPoints)
   const setHoverPoint = useProjectStore((s) => s.setHoverPoint)
   const selectedMeasurementId = useProjectStore((s) => s.selectedMeasurementId)
   const selectMeasurement = useProjectStore((s) => s.selectMeasurement)
   const pendingCalibration = useProjectStore((s) => s.pendingCalibration)
+  const pendingVerify = useProjectStore((s) => s.pendingVerify)
+  const calibrationChooserOpen = useProjectStore((s) => s.calibrationChooserOpen)
 
   const view = rawView ?? IDENTITY_VIEW
   const panMode = activeTool === 'pan' || spaceHeld
@@ -85,6 +101,27 @@ export function SheetCanvas({ sheet }: { sheet: Sheet }) {
   }, [rawView, size.width, size.height, sheet.id])
 
   if (!project) return null
+
+  const sheetMeasurements = project.measurements.filter((m) => m.sheetId === sheet.id)
+  const snapCandidates = collectSnapCandidates(sheetMeasurements, draft.points)
+  const snapRadiusSheetPx = SNAP_SCREEN_PX / view.scale
+
+  /**
+   * Turns a raw screen-space pointer event into the sheet-space point a
+   * drawing action should actually use: snapped onto a nearby existing
+   * vertex unless Alt is held, else angle-locked to the nearest 45° from
+   * the last placed point while Shift is held, else the raw point.
+   */
+  function resolveDrawPoint(rawSheetPoint: Point, evt: MouseEvent): Point {
+    if (!evt.altKey) {
+      const target = findSnapTarget(rawSheetPoint, snapCandidates, snapRadiusSheetPx)
+      if (target) return target
+    }
+    if (evt.shiftKey && draft.points.length > 0) {
+      return snapToAngle(draft.points[draft.points.length - 1], rawSheetPoint)
+    }
+    return rawSheetPoint
+  }
 
   function handleWheel(e: Konva.KonvaEventObject<WheelEvent>) {
     e.evt.preventDefault()
@@ -119,9 +156,9 @@ export function SheetCanvas({ sheet }: { sheet: Sheet }) {
       return
     }
 
-    const sheetPoint = screenToSheet(screenPoint, view)
-    setHoverPoint(sheetPoint)
-    if (draft.tool) setDraftCursor(sheetPoint)
+    const rawSheetPoint = screenToSheet(screenPoint, view)
+    setHoverPoint(rawSheetPoint)
+    if (draft.tool) setDraftCursor(resolveDrawPoint(rawSheetPoint, e.evt))
   }
 
   function handleMouseUp(e: Konva.KonvaEventObject<MouseEvent>) {
@@ -144,12 +181,12 @@ export function SheetCanvas({ sheet }: { sheet: Sheet }) {
   }
 
   function handleStageClick(e: Konva.KonvaEventObject<MouseEvent>) {
-    if (panMode || pendingCalibration) return
+    if (panMode || pendingCalibration || pendingVerify || calibrationChooserOpen) return
     if (e.evt.button !== 0) return
     const container = containerRef.current
     if (!container) return
     const screenPoint = screenPointFromEvent(e.evt, container)
-    const sheetPoint = screenToSheet(screenPoint, view)
+    const sheetPoint = resolveDrawPoint(screenToSheet(screenPoint, view), e.evt)
     const stage = e.target.getStage()
     const clickedEmpty = e.target === stage
 
@@ -170,6 +207,15 @@ export function SheetCanvas({ sheet }: { sheet: Sheet }) {
         beginDraft('calibrate', sheet.id, sheetPoint)
       } else {
         startCalibrationPoints(sheet.id, draft.points[0], sheetPoint)
+        cancelDraft()
+      }
+      return
+    }
+    if (activeTool === 'verify') {
+      if (draft.points.length === 0) {
+        beginDraft('verify', sheet.id, sheetPoint)
+      } else {
+        startVerifyPoints(sheet.id, draft.points[0], sheetPoint)
         cancelDraft()
       }
       return
@@ -215,7 +261,6 @@ export function SheetCanvas({ sheet }: { sheet: Sheet }) {
     return screenDist < 10
   }
 
-  const sheetMeasurements = project.measurements.filter((m) => m.sheetId === sheet.id)
   const countIndex = buildCountIndex(sheetMeasurements)
   const invScale = 1 / view.scale
   const sortedLayers = [...project.layers].sort((a, b) => a.order - b.order)
@@ -272,6 +317,9 @@ export function SheetCanvas({ sheet }: { sheet: Sheet }) {
               cursor={draft.cursor}
               color="#5b8def"
               invScale={invScale}
+              pixelsPerMetre={sheet.calibration?.pixelsPerMetre ?? 0}
+              snapCandidates={snapCandidates}
+              snapRadiusSheetPx={snapRadiusSheetPx}
             />
           </KonvaLayer>
         </Stage>

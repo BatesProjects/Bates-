@@ -1,6 +1,6 @@
 import { putBlob } from './db'
 import { makeId } from './id'
-import { canvasToBlob, isPdfFile, loadImageFile, renderPdfPages } from './pdf'
+import { PDF_SOURCE_DPI, canvasToBlob, isPdfFile, loadImageFile, renderPdfPages } from './pdf'
 import type { Sheet } from './types'
 
 /** Splits an uploaded file (PDF or image) into one or more persisted Sheet records. */
@@ -25,6 +25,7 @@ export async function ingestFile(file: File, projectId: string, startOrder: numb
         imageBlobKey,
         calibration: null,
         createdAt: now,
+        sourceDpi: PDF_SOURCE_DPI,
       })
     }
     return sheets
