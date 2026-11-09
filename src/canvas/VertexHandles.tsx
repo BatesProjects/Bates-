@@ -10,7 +10,7 @@ function flatten(points: Point[]): number[] {
 }
 
 function extractPoints(m: Measurement): Point[] {
-  if (m.type === 'area' || m.type === 'length') return m.points
+  if (m.type === 'area' || m.type === 'length' || m.type === 'wall') return m.points
   if (m.type === 'radius') return [m.center, { x: m.center.x + m.radiusPx, y: m.center.y }]
   if (m.type === 'count') return [m.point]
   return []
@@ -27,7 +27,7 @@ export function VertexHandles({ measurement, invScale, color }: { measurement: M
   }
 
   function commit(nextPoints: Point[]) {
-    if (measurement.type === 'area' || measurement.type === 'length') {
+    if (measurement.type === 'area' || measurement.type === 'length' || measurement.type === 'wall') {
       updateMeasurement(measurement.id, { points: nextPoints } as Partial<Measurement>)
     } else if (measurement.type === 'radius') {
       const [center, edge] = nextPoints
@@ -58,7 +58,7 @@ export function VertexHandles({ measurement, invScale, color }: { measurement: M
     commit(points)
   }
 
-  const showOutline = measurement.type === 'area' || measurement.type === 'length'
+  const showOutline = measurement.type === 'area' || measurement.type === 'length' || measurement.type === 'wall'
 
   return (
     <>

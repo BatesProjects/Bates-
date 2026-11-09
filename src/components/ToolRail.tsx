@@ -23,6 +23,7 @@ const TOOLS: ToolDef[] = [
   { id: 'verify', label: 'Verify scale', shortcut: '', icon: <Icon d="M9 12l2 2 4-4M12 2a10 10 0 100 20 10 10 0 000-20z" /> },
   { id: 'area', label: 'Area', shortcut: 'A', icon: <Icon d="M4 4h16v16H4z" /> },
   { id: 'length', label: 'Length', shortcut: 'L', icon: <Icon d="M3 21L21 3M6 18l3 3M15 6l3-3" /> },
+  { id: 'wall', label: 'Wall', shortcut: 'W', icon: <Icon d="M3 7h18M3 17h18M3 7v10M21 7v10M9 7v10M15 7v10" /> },
   { id: 'count', label: 'Count', shortcut: 'C', icon: <Icon d="M12 2a5 5 0 100 10 5 5 0 000-10zM4 22c0-4 4-6 8-6s8 2 8 6" /> },
   { id: 'radius', label: 'Radius / Circle', shortcut: 'R', icon: <Icon d="M12 12m-8 0a8 8 0 1016 0 8 8 0 10-16 0M12 12h8" /> },
 ]

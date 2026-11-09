@@ -12,7 +12,7 @@ import type {
   Sheet,
 } from '../lib/types'
 
-export type ToolId = 'select' | 'pan' | 'calibrate' | 'verify' | 'area' | 'length' | 'count' | 'radius'
+export type ToolId = 'select' | 'pan' | 'calibrate' | 'verify' | 'area' | 'length' | 'count' | 'radius' | 'wall'
 export type Screen = 'dashboard' | 'takeoff'
 
 const MAX_HISTORY = 200
@@ -55,6 +55,10 @@ interface ProjectStoreState {
   setHoverPoint: (point: Point | null) => void
   spaceHeld: boolean
   setSpaceHeld: (held: boolean) => void
+  /** Set while drawing a cut-out polygon for this area measurement, instead of a new top-level measurement. */
+  cutoutTargetId: string | null
+  startCutout: (measurementId: string) => void
+  cancelCutout: () => void
 
   // --- project lifecycle -----------------------------------------------
   loadProject: (project: Project) => void
@@ -76,6 +80,7 @@ interface ProjectStoreState {
   toggleLayerLocked: (layerId: string) => void
   toggleLayerCollapsed: (layerId: string) => void
   setAllLayersCollapsed: (collapsed: boolean) => void
+  setLayerWastePercent: (layerId: string, percent: number | undefined) => void
   removeLayer: (layerId: string) => void
   setActiveLayer: (layerId: string) => void
 
@@ -121,6 +126,7 @@ function defaultLabel(type: MeasurementType, index: number): string {
     length: 'Length',
     count: 'Count',
     radius: 'Radius',
+    wall: 'Wall',
   }
   return `${names[type]} ${index}`
 }
@@ -153,6 +159,18 @@ export const useProjectStore = create<ProjectStoreState>((set, get) => ({
   setHoverPoint: (point) => set({ hoverPoint: point }),
   spaceHeld: false,
   setSpaceHeld: (held) => set({ spaceHeld: held }),
+  cutoutTargetId: null,
+  startCutout: (measurementId) =>
+    set({
+      activeTool: 'area',
+      draft: EMPTY_DRAFT,
+      selectedMeasurementId: null,
+      cutoutTargetId: measurementId,
+      calibrationChooserOpen: false,
+      pendingCalibration: null,
+      pendingVerify: null,
+    }),
+  cancelCutout: () => set({ cutoutTargetId: null }),
 
   loadProject: (project) =>
     set({
@@ -290,6 +308,12 @@ export const useProjectStore = create<ProjectStoreState>((set, get) => ({
         : s,
     ),
 
+  setLayerWastePercent: (layerId, percent) =>
+    commit(set, get, (p) => ({
+      ...p,
+      layers: p.layers.map((l) => (l.id === layerId ? { ...l, wastePercent: percent } : l)),
+    })),
+
   removeLayer: (layerId) =>
     commit(set, get, (p) => {
       const remaining = p.layers.filter((l) => l.id !== layerId)
@@ -361,6 +385,7 @@ export const useProjectStore = create<ProjectStoreState>((set, get) => ({
       calibrationChooserOpen: tool === 'calibrate',
       pendingCalibration: null,
       pendingVerify: null,
+      cutoutTargetId: null,
     }),
 
   beginDraft: (tool, sheetId, firstPoint) =>
@@ -377,8 +402,25 @@ export const useProjectStore = create<ProjectStoreState>((set, get) => ({
   cancelDraft: () => set({ draft: EMPTY_DRAFT }),
 
   commitDraft: () => {
-    const { draft, project } = get()
+    const { draft, project, cutoutTargetId } = get()
     if (!project || !draft.tool || !draft.sheetId) return
+
+    // Drawing a cut-out for an existing area measurement, not a new one.
+    if (cutoutTargetId && draft.tool === 'area' && draft.points.length >= 3) {
+      const targetId = cutoutTargetId
+      const points = draft.points
+      set({ draft: EMPTY_DRAFT, cutoutTargetId: null, activeTool: 'select', selectedMeasurementId: targetId })
+      commit(set, get, (p) => ({
+        ...p,
+        measurements: p.measurements.map((m) =>
+          m.id === targetId && m.type === 'area'
+            ? { ...m, cutouts: [...(m.cutouts ?? []), { id: makeId(), points }], updatedAt: new Date().toISOString() }
+            : m,
+        ),
+      }))
+      return
+    }
+
     const layerId = project.activeLayerId
     if (!layerId) return
     const now = new Date().toISOString()
@@ -405,6 +447,15 @@ export const useProjectStore = create<ProjectStoreState>((set, get) => ({
         type: 'length',
         label: nextMeasurementLabel(project, layerId, 'length'),
         points: draft.points,
+      }
+    } else if (draft.tool === 'wall' && draft.points.length >= 2) {
+      measurement = {
+        ...base,
+        type: 'wall',
+        label: nextMeasurementLabel(project, layerId, 'wall'),
+        points: draft.points,
+        heightM: 2.4,
+        openings: [],
       }
     } else if (draft.tool === 'radius' && draft.points.length >= 2) {
       const [center, edge] = draft.points

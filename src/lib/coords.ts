@@ -97,6 +97,21 @@ export function polygonAreaPx2(points: Point[]): number {
   return Math.abs(sum) / 2
 }
 
+/** Outer polygon area minus every hole's area, clamped to zero (holes can't exceed the outer area). */
+export function polygonWithHolesAreaPx2(outer: Point[], holes: Point[][]): number {
+  const outerArea = polygonAreaPx2(outer)
+  const holesArea = holes.reduce((sum, hole) => sum + polygonAreaPx2(hole), 0)
+  return Math.max(0, outerArea - holesArea)
+}
+
+/** True (sloped) area from a plan-view (flat, top-down) area, given a pitch in degrees. */
+export function applyPitch(planAreaPx2: number, pitchDeg: number): number {
+  if (!pitchDeg) return planAreaPx2
+  const cos = Math.cos((pitchDeg * Math.PI) / 180)
+  if (cos <= 0) return planAreaPx2
+  return planAreaPx2 / cos
+}
+
 // ---------------------------------------------------------------------------
 // Real-world unit conversion. pixelsPerMetre is always defined in sheet space.
 // ---------------------------------------------------------------------------

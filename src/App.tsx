@@ -49,6 +49,7 @@ export default function App() {
           store.clearPendingCalibration()
           store.clearPendingVerify()
           store.closeCalibrationChooser()
+          store.cancelCutout()
           if (store.activeTool === 'calibrate' || store.activeTool === 'verify') store.setActiveTool('select')
           break
         case 'Enter':
@@ -70,6 +71,10 @@ export default function App() {
         case 'l':
         case 'L':
           store.setActiveTool('length')
+          break
+        case 'w':
+        case 'W':
+          store.setActiveTool('wall')
           break
         case 'c':
         case 'C':

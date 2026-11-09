@@ -52,7 +52,7 @@ function buildCountIndex(measurements: Measurement[]): Map<string, number> {
 function collectSnapCandidates(measurements: Measurement[], draftPoints: Point[]): Point[] {
   const points: Point[] = [...draftPoints]
   for (const m of measurements) {
-    if (m.type === 'area' || m.type === 'length') points.push(...m.points)
+    if (m.type === 'area' || m.type === 'length' || m.type === 'wall') points.push(...m.points)
     else if (m.type === 'radius') points.push(m.center)
     else if (m.type === 'count') points.push(m.point)
   }
@@ -83,6 +83,7 @@ export function SheetCanvas({ sheet }: { sheet: Sheet }) {
   const pendingCalibration = useProjectStore((s) => s.pendingCalibration)
   const pendingVerify = useProjectStore((s) => s.pendingVerify)
   const calibrationChooserOpen = useProjectStore((s) => s.calibrationChooserOpen)
+  const cutoutTargetId = useProjectStore((s) => s.cutoutTargetId)
 
   const view = rawView ?? IDENTITY_VIEW
   const panMode = activeTool === 'pan' || spaceHeld
@@ -244,6 +245,16 @@ export function SheetCanvas({ sheet }: { sheet: Sheet }) {
       }
       return
     }
+    if (activeTool === 'wall') {
+      if (draft.points.length === 0) {
+        beginDraft('wall', sheet.id, sheetPoint)
+      } else if (draft.points.length >= 2 && isDoubleClick) {
+        commitDraft()
+      } else {
+        addDraftPoint(sheetPoint)
+      }
+      return
+    }
     if (activeTool === 'radius') {
       if (draft.points.length === 0) {
         beginDraft('radius', sheet.id, sheetPoint)
@@ -271,6 +282,11 @@ export function SheetCanvas({ sheet }: { sheet: Sheet }) {
 
   return (
     <div ref={containerRef} className="relative flex-1 overflow-hidden bg-[#0e0f13]" style={{ cursor: cursorStyle }}>
+      {cutoutTargetId && (
+        <div className="absolute left-1/2 top-3 z-10 -translate-x-1/2 rounded bg-[#1c1f27] px-3 py-1.5 text-xs text-[#e4e7ec] shadow-lg ring-1 ring-[#333742]">
+          Drawing a cut-out — trace the void, then close it. <span className="text-[#6d7686]">Esc to cancel.</span>
+        </div>
+      )}
       {size.width > 0 && size.height > 0 && (
         <Stage
           width={size.width}
@@ -315,7 +331,7 @@ export function SheetCanvas({ sheet }: { sheet: Sheet }) {
               tool={draft.tool ?? 'select'}
               points={draft.points}
               cursor={draft.cursor}
-              color="#5b8def"
+              color={cutoutTargetId ? '#f87171' : '#5b8def'}
               invScale={invScale}
               pixelsPerMetre={sheet.calibration?.pixelsPerMetre ?? 0}
               snapCandidates={snapCandidates}

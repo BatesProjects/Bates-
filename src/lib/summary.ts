@@ -10,6 +10,9 @@ export interface LayerSummary {
     lengthM: number
     volumeM3: number
     count: number
+    /** Sum of each item's area inflated by its waste %, falling back to its plain area where no waste applies. */
+    areaM2WithWaste: number
+    lengthMWithWaste: number
   }
 }
 
@@ -19,21 +22,28 @@ export interface ProjectSummary {
 }
 
 function emptyTotals(): LayerSummary['totals'] {
-  return { areaM2: 0, perimeterM: 0, lengthM: 0, volumeM3: 0, count: 0 }
+  return { areaM2: 0, perimeterM: 0, lengthM: 0, volumeM3: 0, count: 0, areaM2WithWaste: 0, lengthMWithWaste: 0 }
 }
 
 function addInto(totals: LayerSummary['totals'], result: MeasurementResult) {
   if (result.measurement.type === 'area') {
     totals.areaM2 += result.areaM2 ?? 0
     totals.volumeM3 += result.volumeM3 ?? 0
+    totals.areaM2WithWaste += result.areaM2WithWaste ?? result.areaM2 ?? 0
   } else if (result.measurement.type === 'length') {
     totals.lengthM += result.lengthM ?? 0
     totals.areaM2 += result.areaM2 ?? 0
+    totals.lengthMWithWaste += result.lengthMWithWaste ?? result.lengthM ?? 0
   } else if (result.measurement.type === 'count') {
     totals.count += result.count ?? 0
   } else if (result.measurement.type === 'radius') {
     totals.areaM2 += result.areaM2 ?? 0
     totals.perimeterM += result.perimeterM ?? 0
+    totals.areaM2WithWaste += result.areaM2WithWaste ?? result.areaM2 ?? 0
+  } else if (result.measurement.type === 'wall') {
+    totals.areaM2 += result.areaM2 ?? 0
+    totals.lengthM += result.lengthM ?? 0
+    totals.areaM2WithWaste += result.areaM2WithWaste ?? result.areaM2 ?? 0
   }
 }
 
@@ -46,7 +56,7 @@ export function buildSummary(project: Project, measurements?: Measurement[]): Pr
     .sort((a, b) => a.order - b.order)
     .map((layer) => {
       const layerMeasurements = source.filter((m) => m.layerId === layer.id)
-      const results = layerMeasurements.map((m) => computeResult(m, sheetsById.get(m.sheetId)))
+      const results = layerMeasurements.map((m) => computeResult(m, sheetsById.get(m.sheetId), layer))
       const totals = emptyTotals()
       for (const r of results) {
         addInto(totals, r)

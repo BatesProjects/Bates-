@@ -9,6 +9,7 @@ export function LayersPanel() {
   const setLayerColor = useProjectStore((s) => s.setLayerColor)
   const toggleLayerVisible = useProjectStore((s) => s.toggleLayerVisible)
   const toggleLayerLocked = useProjectStore((s) => s.toggleLayerLocked)
+  const setLayerWastePercent = useProjectStore((s) => s.setLayerWastePercent)
   const removeLayer = useProjectStore((s) => s.removeLayer)
   const setActiveLayer = useProjectStore((s) => s.setActiveLayer)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -78,6 +79,21 @@ export function LayersPanel() {
                   {layer.name}
                 </span>
               )}
+
+              <input
+                type="number"
+                min="0"
+                step="any"
+                title="Waste % applied to this layer's quantities"
+                defaultValue={layer.wastePercent ?? ''}
+                placeholder="0%"
+                onClick={(e) => e.stopPropagation()}
+                onBlur={(e) => {
+                  const v = Number.parseFloat(e.target.value)
+                  setLayerWastePercent(layer.id, Number.isFinite(v) && v > 0 ? v : undefined)
+                }}
+                className="w-9 shrink-0 rounded bg-[#14161b] px-1 py-0.5 text-center text-[10px] text-[#8b93a3] outline-none ring-1 ring-[#2a2d35] focus:ring-[#5b8def]"
+              />
 
               <button
                 title={layer.visible ? 'Hide layer' : 'Show layer'}

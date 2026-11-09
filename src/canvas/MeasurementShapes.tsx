@@ -42,7 +42,7 @@ export function MeasurementShapes({
     <>
       {measurements.map((m) => {
         const selected = m.id === selectedId
-        const result = computeResult(m, sheet)
+        const result = computeResult(m, sheet, layer)
         const onClick = selectable
           ? (e: { cancelBubble: boolean }) => {
               e.cancelBubble = true
@@ -52,6 +52,9 @@ export function MeasurementShapes({
 
         if (m.type === 'area') {
           const centroid = m.points.reduce((a, p) => ({ x: a.x + p.x / m.points.length, y: a.y + p.y / m.points.length }), { x: 0, y: 0 })
+          const areaLabel = m.pitchDeg
+            ? `${fmt(result.areaM2)} m² (true, ${m.pitchDeg}°)`
+            : `${fmt(result.areaM2)} m²`
           return (
             <Group key={m.id}>
               <Line
@@ -64,10 +67,23 @@ export function MeasurementShapes({
                 onTap={onClick}
                 listening={selectable}
               />
+              {(m.cutouts ?? []).map((cutout) => (
+                <Group key={cutout.id}>
+                  <Line points={flatten(cutout.points)} closed fill="#000" globalCompositeOperation="destination-out" listening={false} />
+                  <Line
+                    points={flatten(cutout.points)}
+                    closed
+                    stroke="#ffffff"
+                    strokeWidth={1.5 * invScale}
+                    dash={[4 * invScale, 3 * invScale]}
+                    listening={false}
+                  />
+                </Group>
+              ))}
               <Text
                 x={centroid.x}
                 y={centroid.y}
-                text={`${m.label}\n${fmt(result.areaM2)} m²`}
+                text={`${m.label}\n${areaLabel}`}
                 fontSize={12 * invScale}
                 fill="#e4e7ec"
                 align="center"
@@ -102,6 +118,37 @@ export function MeasurementShapes({
                   fontSize={12 * invScale}
                   fill="#e4e7ec"
                   offsetY={18 * invScale}
+                  listening={false}
+                />
+              )}
+            </Group>
+          )
+        }
+
+        if (m.type === 'wall') {
+          const mid = m.points[Math.floor((m.points.length - 1) / 2)]
+          return (
+            <Group key={m.id}>
+              <Line
+                points={flatten(m.points)}
+                stroke={layer.color}
+                strokeWidth={(selected ? 6 : 5) * invScale}
+                lineCap="square"
+                lineJoin="round"
+                opacity={0.85}
+                onClick={onClick}
+                onTap={onClick}
+                hitStrokeWidth={14 * invScale}
+                listening={selectable}
+              />
+              {mid && (
+                <Text
+                  x={mid.x}
+                  y={mid.y}
+                  text={`${m.label} (h=${m.heightM}m): ${fmt(result.areaM2)} m² net`}
+                  fontSize={12 * invScale}
+                  fill="#e4e7ec"
+                  offsetY={20 * invScale}
                   listening={false}
                 />
               )}

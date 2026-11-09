@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
+  applyPitch,
   computePixelsPerMetre,
   distance,
   findSnapTarget,
   polygonAreaPx2,
   polygonPerimeterPx,
+  polygonWithHolesAreaPx2,
   polylineLengthPx,
   px2ToM2,
   pxToM,
@@ -223,5 +225,95 @@ describe('pixelsPerMetreForScale (preset architectural scales)', () => {
   it('a 1:1 plot at 180dpi equals 180/0.0254 px per metre', () => {
     const ppm = pixelsPerMetreForScale(1, 180)
     expect(ppm).toBeCloseTo(180 / 0.0254, 6)
+  })
+})
+
+describe('polygonWithHolesAreaPx2', () => {
+  it('subtracts a single hole from the outer area', () => {
+    const outer = [
+      { x: 0, y: 0 },
+      { x: 1000, y: 0 },
+      { x: 1000, y: 1000 },
+      { x: 0, y: 1000 },
+    ] // 1000x1000
+    const hole = [
+      { x: 100, y: 100 },
+      { x: 300, y: 100 },
+      { x: 300, y: 300 },
+      { x: 100, y: 300 },
+    ] // 200x200
+    const area = polygonWithHolesAreaPx2(outer, [hole])
+    expect(area).toBeCloseTo(1000 * 1000 - 200 * 200, 6)
+  })
+
+  it('subtracts multiple holes', () => {
+    const outer = [
+      { x: 0, y: 0 },
+      { x: 1000, y: 0 },
+      { x: 1000, y: 1000 },
+      { x: 0, y: 1000 },
+    ]
+    const holeA = [
+      { x: 0, y: 0 },
+      { x: 100, y: 0 },
+      { x: 100, y: 100 },
+      { x: 0, y: 100 },
+    ] // 100x100
+    const holeB = [
+      { x: 900, y: 900 },
+      { x: 1000, y: 900 },
+      { x: 1000, y: 1000 },
+      { x: 900, y: 1000 },
+    ] // 100x100
+    const area = polygonWithHolesAreaPx2(outer, [holeA, holeB])
+    expect(area).toBeCloseTo(1_000_000 - 10_000 - 10_000, 6)
+  })
+
+  it('never goes negative even if holes somehow exceed the outer area', () => {
+    const outer = [
+      { x: 0, y: 0 },
+      { x: 10, y: 0 },
+      { x: 10, y: 10 },
+      { x: 0, y: 10 },
+    ] // 100
+    const oversizedHole = [
+      { x: 0, y: 0 },
+      { x: 1000, y: 0 },
+      { x: 1000, y: 1000 },
+      { x: 0, y: 1000 },
+    ] // way bigger than the outer shape
+    expect(polygonWithHolesAreaPx2(outer, [oversizedHole])).toBe(0)
+  })
+
+  it('with no holes, matches the plain polygon area', () => {
+    const outer = [
+      { x: 0, y: 0 },
+      { x: 400, y: 0 },
+      { x: 400, y: 200 },
+      { x: 0, y: 200 },
+    ]
+    expect(polygonWithHolesAreaPx2(outer, [])).toBeCloseTo(polygonAreaPx2(outer), 9)
+  })
+})
+
+describe('applyPitch', () => {
+  it('leaves area unchanged at 0 degrees (flat)', () => {
+    expect(applyPitch(1000, 0)).toBe(1000)
+  })
+
+  it('a 45 degree pitch increases area by 1/cos(45deg) ~= 1.41421x', () => {
+    const result = applyPitch(1000, 45)
+    expect(result).toBeCloseTo(1000 * Math.SQRT2, 6)
+  })
+
+  it('matches a known roofing rule of thumb: a 22.5deg (5/12-ish) pitch adds about 8.2%', () => {
+    const result = applyPitch(1000, 22.5)
+    expect(result / 1000).toBeCloseTo(1.0824, 3)
+  })
+
+  it('a steeper pitch always yields more area than a shallower one', () => {
+    const shallow = applyPitch(1000, 15)
+    const steep = applyPitch(1000, 45)
+    expect(steep).toBeGreaterThan(shallow)
   })
 })

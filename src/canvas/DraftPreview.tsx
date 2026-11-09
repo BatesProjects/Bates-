@@ -6,6 +6,13 @@ function flatten(points: Point[]): number[] {
   return points.flatMap((p) => [p.x, p.y])
 }
 
+function hexToRgba(hex: string, alpha: number): string {
+  const r = Number.parseInt(hex.slice(1, 3), 16)
+  const g = Number.parseInt(hex.slice(3, 5), 16)
+  const b = Number.parseInt(hex.slice(5, 7), 16)
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`
+}
+
 function fmtDist(px: number, pixelsPerMetre: number): string {
   if (pixelsPerMetre <= 0) return `${px.toFixed(0)}px`
   return `${pxToM(px, pixelsPerMetre).toFixed(2)}m`
@@ -30,7 +37,7 @@ export function DraftPreview({
   snapCandidates = [],
   snapRadiusSheetPx = 0,
 }: {
-  tool: 'area' | 'length' | 'radius' | 'calibrate' | 'verify' | 'count' | 'select' | 'pan'
+  tool: 'area' | 'length' | 'radius' | 'calibrate' | 'verify' | 'count' | 'wall' | 'select' | 'pan'
   points: Point[]
   cursor: Point | null
   color: string
@@ -48,7 +55,7 @@ export function DraftPreview({
     <Circle x={cursor.x} y={cursor.y} radius={9 * invScale} stroke="#4ade80" strokeWidth={1.5 * invScale} listening={false} />
   )
 
-  if (tool === 'area' || tool === 'length') {
+  if (tool === 'area' || tool === 'length' || tool === 'wall') {
     const previewPoints = cursor ? [...points, cursor] : points
     const lastPoint = points[points.length - 1]
     const currentSegmentPx = cursor ? distance(lastPoint, cursor) : 0
@@ -61,9 +68,9 @@ export function DraftPreview({
           points={flatten(previewPoints)}
           closed={tool === 'area' && points.length >= 2}
           stroke={color}
-          strokeWidth={(tool === 'area' ? 2 : 2.5) * invScale}
+          strokeWidth={(tool === 'area' ? 2 : tool === 'wall' ? 4 : 2.5) * invScale}
           dash={[6 * invScale, 4 * invScale]}
-          fill={tool === 'area' ? 'rgba(91, 141, 239, 0.12)' : undefined}
+          fill={tool === 'area' ? hexToRgba(color, 0.12) : undefined}
           lineCap="round"
           listening={false}
         />
