@@ -9,8 +9,15 @@ function shapeLabel(shape: ItemPreset['markerShape']): string {
 
 function PresetRow({ preset }: { preset: ItemPreset }) {
   const updateItemPreset = useProjectStore((s) => s.updateItemPreset)
-  const deleteItemPreset = useProjectStore((s) => s.deleteItemPreset)
+  const deleteItemPresetAndMarkers = useProjectStore((s) => s.deleteItemPresetAndMarkers)
+  const project = useProjectStore((s) => s.project)
   const [colorPickerOpen, setColorPickerOpen] = useState(false)
+
+  const markerCount =
+    project?.measurements.reduce(
+      (sum, m) => sum + (m.type === 'count' && m.itemPresetId === preset.id ? m.points.length : 0),
+      0,
+    ) ?? 0
 
   return (
     <div className="relative mb-2 rounded border border-[#2a2d35] bg-[#191b21] p-2">
@@ -41,8 +48,14 @@ function PresetRow({ preset }: { preset: ItemPreset }) {
           ))}
         </select>
         <button
-          title="Delete item preset"
-          onClick={() => confirm(`Delete item preset "${preset.name}"? Existing markers keep their count but lose the colour/shape/cost code.`) && deleteItemPreset(preset.id)}
+          title="Delete item preset and all its markers"
+          onClick={() =>
+            confirm(
+              markerCount > 0
+                ? `Delete "${preset.name}" and remove all ${markerCount} of its marker(s) from this project? This can't be undone from here.`
+                : `Delete item preset "${preset.name}"?`,
+            ) && deleteItemPresetAndMarkers(preset.id)
+          }
           className="shrink-0 text-[#8b93a3] hover:text-[#c0392b]"
         >
           ×

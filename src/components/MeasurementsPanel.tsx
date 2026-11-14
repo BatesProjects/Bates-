@@ -434,6 +434,7 @@ export function MeasurementsPanel() {
   const setAllLayersCollapsed = useProjectStore((s) => s.setAllLayersCollapsed)
   const toggleItemPresetCollapsed = useProjectStore((s) => s.toggleItemPresetCollapsed)
   const toggleItemPresetVisible = useProjectStore((s) => s.toggleItemPresetVisible)
+  const deleteItemPresetAndMarkers = useProjectStore((s) => s.deleteItemPresetAndMarkers)
   const itemPresets = useProjectStore((s) => s.itemPresets)
   if (!project) return null
 
@@ -525,7 +526,7 @@ export function MeasurementsPanel() {
                 const collapsed = (project.collapsedItemPresetIds ?? []).includes(row.preset.id)
                 const hidden = (project.hiddenItemPresetIds ?? []).includes(row.preset.id)
                 return (
-                  <div key={row.preset.id} className="rounded px-1.5 py-1 text-xs">
+                  <div key={row.preset.id} className="group rounded px-1.5 py-1 text-xs">
                     <div
                       className="flex cursor-pointer items-center gap-1.5"
                       onClick={() => toggleItemPresetCollapsed(row.preset.id)}
@@ -560,6 +561,22 @@ export function MeasurementsPanel() {
                         className="shrink-0 text-[#8b93a3] hover:text-[#d7dae0]"
                       >
                         <EyeIcon visible={!hidden} />
+                      </button>
+                      <button
+                        title="Delete this item and all its markers"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          if (
+                            confirm(
+                              `Delete "${row.preset.name}" and remove all ${row.count} of its marker(s) from this project? This can't be undone from here.`,
+                            )
+                          ) {
+                            deleteItemPresetAndMarkers(row.preset.id)
+                          }
+                        }}
+                        className="hidden shrink-0 text-[#8b93a3] hover:text-[#c0392b] group-hover:inline"
+                      >
+                        ×
                       </button>
                     </div>
                     {!collapsed && (

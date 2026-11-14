@@ -68,6 +68,8 @@ interface ProjectStoreState {
   addItemPreset: (preset?: Partial<Omit<ItemPreset, 'id'>>) => string
   updateItemPreset: (id: string, patch: Partial<Omit<ItemPreset, 'id'>>) => void
   deleteItemPreset: (id: string) => void
+  /** Deletes the preset AND every count marker tagged with it, in the current project (mirrors removeLayer deleting its measurements). */
+  deleteItemPresetAndMarkers: (id: string) => void
   /** The item preset new count-tool clicks are grouped under. Null = plain, ungrouped tally marks (legacy behaviour). */
   activeItemPresetId: string | null
   setActiveItemPresetId: (id: string | null) => void
@@ -223,6 +225,15 @@ export const useProjectStore = create<ProjectStoreState>((set, get) => ({
       itemPresets: s.itemPresets.filter((p) => p.id !== id),
       activeItemPresetId: s.activeItemPresetId === id ? null : s.activeItemPresetId,
     })),
+  deleteItemPresetAndMarkers: (id) => {
+    commit(set, get, (p) => ({
+      ...p,
+      measurements: p.measurements.filter((m) => !(m.type === 'count' && m.itemPresetId === id)),
+      hiddenItemPresetIds: (p.hiddenItemPresetIds ?? []).filter((pid) => pid !== id),
+      collapsedItemPresetIds: (p.collapsedItemPresetIds ?? []).filter((pid) => pid !== id),
+    }))
+    get().deleteItemPreset(id)
+  },
   activeItemPresetId: null,
   setActiveItemPresetId: (id) => set({ activeItemPresetId: id }),
   itemPresetsDialogOpen: false,
