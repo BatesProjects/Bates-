@@ -382,13 +382,16 @@ function ResultRow({ result }: { result: MeasurementResult }) {
   )
 }
 
-function ItemGroupChip({ group }: { group: ItemSummaryRow['groups'][number] }) {
+function ItemGroupChip({ group, presetId }: { group: ItemSummaryRow['groups'][number]; presetId: string }) {
   const setActiveSheet = useProjectStore((s) => s.setActiveSheet)
   const selectMeasurement = useProjectStore((s) => s.selectMeasurement)
   const toggleLayerVisible = useProjectStore((s) => s.toggleLayerVisible)
+  const toggleItemPresetVisible = useProjectStore((s) => s.toggleItemPresetVisible)
   const focusOnPoint = useProjectStore((s) => s.focusOnPoint)
   const project = useProjectStore((s) => s.project)
   const layer = project?.layers.find((l) => l.id === group.layerId)
+  const itemHidden = (project?.hiddenItemPresetIds ?? []).includes(presetId)
+  const anyHidden = (layer && !layer.visible) || itemHidden
 
   return (
     <button
@@ -396,14 +399,32 @@ function ItemGroupChip({ group }: { group: ItemSummaryRow['groups'][number] }) {
         e.stopPropagation()
         if (project && project.activeSheetId !== group.sheetId) setActiveSheet(group.sheetId)
         if (layer && !layer.visible) toggleLayerVisible(layer.id)
+        if (itemHidden) toggleItemPresetVisible(presetId)
         selectMeasurement(group.measurementId)
         focusOnPoint(group.sheetId, group.centroid)
       }}
-      title={`Jump to these ${group.pointCount} marker(s) on "${group.sheetName}"${layer && !layer.visible ? ' (its layer is hidden — this will show it)' : ''}`}
+      title={`Jump to these ${group.pointCount} marker(s) on "${group.sheetName}"${anyHidden ? ' (hidden — this will show it)' : ''}`}
       className="rounded border border-[#333742] px-1.5 py-0.5 text-[10px] text-[#8b93a3] hover:border-[#5b8def] hover:text-[#c7cbd4]"
     >
-      {group.sheetName} ({group.pointCount}){layer && !layer.visible && <span className="text-[#e8a53d]"> · hidden</span>}
+      {group.sheetName} ({group.pointCount}){anyHidden && <span className="text-[#e8a53d]"> · hidden</span>}
     </button>
+  )
+}
+
+function EyeIcon({ visible }: { visible: boolean }) {
+  return visible ? (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+      <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" stroke="currentColor" strokeWidth="1.8" />
+      <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.8" />
+    </svg>
+  ) : (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+      <path
+        d="M3 3l18 18M10.6 10.6a3 3 0 004 4M9.5 5.4A11 11 0 0112 5c7 0 11 7 11 7a13.7 13.7 0 01-3.4 4.1M6.1 6.1A13.6 13.6 0 001 12s4 7 11 7a10.7 10.7 0 004.9-1.1"
+        stroke="currentColor"
+        strokeWidth="1.8"
+      />
+    </svg>
   )
 }
 
@@ -411,6 +432,8 @@ export function MeasurementsPanel() {
   const project = useProjectStore((s) => s.project)
   const toggleLayerCollapsed = useProjectStore((s) => s.toggleLayerCollapsed)
   const setAllLayersCollapsed = useProjectStore((s) => s.setAllLayersCollapsed)
+  const toggleItemPresetCollapsed = useProjectStore((s) => s.toggleItemPresetCollapsed)
+  const toggleItemPresetVisible = useProjectStore((s) => s.toggleItemPresetVisible)
   const itemPresets = useProjectStore((s) => s.itemPresets)
   if (!project) return null
 
@@ -498,26 +521,57 @@ export function MeasurementsPanel() {
           <div className="mb-3 border-t border-[#2a2d35] pt-2">
             <div className="mb-1 px-0.5 text-[11px] font-medium text-[#6d7686]">By item</div>
             <div className="flex flex-col gap-0.5">
-              {itemSummary.map((row) => (
-                <div key={row.preset.id} className="rounded px-1.5 py-1 text-xs">
-                  <div className="flex items-center gap-1.5">
-                    <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: row.preset.color }} />
-                    <span className="min-w-0 flex-1 truncate text-[#c7cbd4]">{row.preset.name}</span>
-                    {row.preset.costCode && <span className="shrink-0 text-[10px] text-[#6d7686]">{row.preset.costCode}</span>}
-                    <span className="shrink-0 text-[#8b93a3]">
-                      {row.count} no.
-                      {row.countWithWaste > row.count && (
-                        <span className="text-[#6d7686]"> ({row.countWithWaste} incl. waste)</span>
-                      )}
-                    </span>
+              {itemSummary.map((row) => {
+                const collapsed = (project.collapsedItemPresetIds ?? []).includes(row.preset.id)
+                const hidden = (project.hiddenItemPresetIds ?? []).includes(row.preset.id)
+                return (
+                  <div key={row.preset.id} className="rounded px-1.5 py-1 text-xs">
+                    <div
+                      className="flex cursor-pointer items-center gap-1.5"
+                      onClick={() => toggleItemPresetCollapsed(row.preset.id)}
+                      title={collapsed ? 'Expand item' : 'Collapse item'}
+                    >
+                      <svg
+                        width="10"
+                        height="10"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        className={`shrink-0 text-[#6d7686] transition-transform ${collapsed ? '-rotate-90' : ''}`}
+                      >
+                        <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                      <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: row.preset.color }} />
+                      <span className={`min-w-0 flex-1 truncate ${hidden ? 'text-[#5b6270]' : 'text-[#c7cbd4]'}`}>
+                        {row.preset.name}
+                      </span>
+                      {row.preset.costCode && <span className="shrink-0 text-[10px] text-[#6d7686]">{row.preset.costCode}</span>}
+                      <span className="shrink-0 text-[#8b93a3]">
+                        {row.count} no.
+                        {row.countWithWaste > row.count && (
+                          <span className="text-[#6d7686]"> ({row.countWithWaste} incl. waste)</span>
+                        )}
+                      </span>
+                      <button
+                        title={hidden ? 'Show item on the plan' : 'Hide item from the plan'}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          toggleItemPresetVisible(row.preset.id)
+                        }}
+                        className="shrink-0 text-[#8b93a3] hover:text-[#d7dae0]"
+                      >
+                        <EyeIcon visible={!hidden} />
+                      </button>
+                    </div>
+                    {!collapsed && (
+                      <div className="mt-0.5 flex flex-wrap gap-1 pl-3.5">
+                        {row.groups.map((g) => (
+                          <ItemGroupChip key={g.measurementId} group={g} presetId={row.preset.id} />
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  <div className="mt-0.5 flex flex-wrap gap-1 pl-3.5">
-                    {row.groups.map((g) => (
-                      <ItemGroupChip key={g.measurementId} group={g} />
-                    ))}
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </div>
         )}

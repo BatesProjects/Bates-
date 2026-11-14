@@ -169,6 +169,10 @@ export interface Project {
   measurements: Measurement[]
   activeSheetId: string | null
   activeLayerId: string | null
+  /** ItemPreset ids hidden from the canvas (from the summary's "By item" eye button) — markers stay counted, just not drawn. */
+  hiddenItemPresetIds?: string[]
+  /** ItemPreset ids collapsed in the takeoff summary's "By item" section. */
+  collapsedItemPresetIds?: string[]
 }
 
 /** Computed, display-ready results derived from a measurement + its sheet's calibration. */

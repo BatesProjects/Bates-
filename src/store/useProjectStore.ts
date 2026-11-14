@@ -99,6 +99,10 @@ interface ProjectStoreState {
   removeLayer: (layerId: string) => void
   setActiveLayer: (layerId: string) => void
 
+  // --- "By item" summary rows -----------------------------------------
+  toggleItemPresetVisible: (presetId: string) => void
+  toggleItemPresetCollapsed: (presetId: string) => void
+
   // --- measurements -----------------------------------------------------
   addMeasurement: (measurement: Measurement) => void
   addCountMarker: (sheetId: string, point: Point) => void
@@ -385,6 +389,25 @@ export const useProjectStore = create<ProjectStoreState>((set, get) => ({
 
   setActiveLayer: (layerId) =>
     set((s) => (s.project ? { project: { ...s.project, activeLayerId: layerId } } : s)),
+
+  toggleItemPresetVisible: (presetId) =>
+    commit(set, get, (p) => {
+      const hidden = new Set(p.hiddenItemPresetIds ?? [])
+      if (hidden.has(presetId)) hidden.delete(presetId)
+      else hidden.add(presetId)
+      return { ...p, hiddenItemPresetIds: [...hidden] }
+    }),
+
+  // Collapse state is purely a takeoff-summary display preference, like
+  // toggleLayerCollapsed — kept off the undo stack but still saved with the project.
+  toggleItemPresetCollapsed: (presetId) =>
+    set((s) => {
+      if (!s.project) return s
+      const collapsed = new Set(s.project.collapsedItemPresetIds ?? [])
+      if (collapsed.has(presetId)) collapsed.delete(presetId)
+      else collapsed.add(presetId)
+      return { project: touch({ ...s.project, collapsedItemPresetIds: [...collapsed] }) }
+    }),
 
   addMeasurement: (measurement) =>
     commit(set, get, (p) => ({ ...p, measurements: [...p.measurements, measurement] })),

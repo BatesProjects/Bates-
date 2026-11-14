@@ -109,6 +109,10 @@ export function SheetCanvas({ sheet }: { sheet: Sheet }) {
   const sheetMeasurements = project.measurements.filter((m) => m.sheetId === sheet.id)
   const snapCandidates = collectSnapCandidates(sheetMeasurements, draft.points)
   const snapRadiusSheetPx = SNAP_SCREEN_PX / view.scale
+  const hiddenItemPresetIds = project.hiddenItemPresetIds ?? []
+  const visibleSheetMeasurements = sheetMeasurements.filter(
+    (m) => !(m.type === 'count' && m.itemPresetId && hiddenItemPresetIds.includes(m.itemPresetId)),
+  )
 
   /**
    * Turns a raw screen-space pointer event into the sheet-space point a
@@ -277,7 +281,7 @@ export function SheetCanvas({ sheet }: { sheet: Sheet }) {
 
   const invScale = 1 / view.scale
   const sortedLayers = [...project.layers].sort((a, b) => a.order - b.order)
-  const selectedMeasurement = sheetMeasurements.find((m) => m.id === selectedMeasurementId)
+  const selectedMeasurement = visibleSheetMeasurements.find((m) => m.id === selectedMeasurementId)
   const selectedLayer = selectedMeasurement ? project.layers.find((l) => l.id === selectedMeasurement.layerId) : undefined
 
   const cursorStyle = panMode ? 'grab' : activeTool === 'select' ? 'default' : 'crosshair'
@@ -340,7 +344,7 @@ export function SheetCanvas({ sheet }: { sheet: Sheet }) {
                   key={layer.id}
                   sheet={sheet}
                   layer={layer}
-                  measurements={sheetMeasurements.filter((m) => m.layerId === layer.id)}
+                  measurements={visibleSheetMeasurements.filter((m) => m.layerId === layer.id)}
                   invScale={invScale}
                   itemPresets={itemPresets}
                 />
