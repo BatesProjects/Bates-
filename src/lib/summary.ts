@@ -1,5 +1,5 @@
 import { computeResult } from './measure'
-import type { Layer, Measurement, MeasurementResult, Project } from './types'
+import type { ItemPreset, Layer, Measurement, MeasurementResult, Project } from './types'
 
 export interface LayerSummary {
   layer: Layer
@@ -13,6 +13,7 @@ export interface LayerSummary {
     /** Sum of each item's area inflated by its waste %, falling back to its plain area where no waste applies. */
     areaM2WithWaste: number
     lengthMWithWaste: number
+    countWithWaste: number
   }
 }
 
@@ -21,8 +22,15 @@ export interface ProjectSummary {
   grandTotals: LayerSummary['totals']
 }
 
+/** One row per saved item preset that has at least one count group using it, totalled across every layer and sheet. */
+export interface ItemSummaryRow {
+  preset: ItemPreset
+  count: number
+  countWithWaste: number
+}
+
 function emptyTotals(): LayerSummary['totals'] {
-  return { areaM2: 0, perimeterM: 0, lengthM: 0, volumeM3: 0, count: 0, areaM2WithWaste: 0, lengthMWithWaste: 0 }
+  return { areaM2: 0, perimeterM: 0, lengthM: 0, volumeM3: 0, count: 0, areaM2WithWaste: 0, lengthMWithWaste: 0, countWithWaste: 0 }
 }
 
 function addInto(totals: LayerSummary['totals'], result: MeasurementResult) {
@@ -36,6 +44,7 @@ function addInto(totals: LayerSummary['totals'], result: MeasurementResult) {
     totals.lengthMWithWaste += result.lengthMWithWaste ?? result.lengthM ?? 0
   } else if (result.measurement.type === 'count') {
     totals.count += result.count ?? 0
+    totals.countWithWaste += result.countWithWaste ?? result.count ?? 0
   } else if (result.measurement.type === 'radius') {
     totals.areaM2 += result.areaM2 ?? 0
     totals.perimeterM += result.perimeterM ?? 0
@@ -66,4 +75,25 @@ export function buildSummary(project: Project, measurements?: Measurement[]): Pr
     })
 
   return { layers, grandTotals }
+}
+
+/** Groups every count measurement tied to a saved item preset, across all layers and sheets, into one row per item. */
+export function buildItemSummary(project: Project, itemPresets: ItemPreset[]): ItemSummaryRow[] {
+  const sheetsById = new Map(project.sheets.map((s) => [s.id, s]))
+  const layersById = new Map(project.layers.map((l) => [l.id, l]))
+  const totals = new Map<string, { count: number; countWithWaste: number }>()
+
+  for (const m of project.measurements) {
+    if (m.type !== 'count' || !m.itemPresetId) continue
+    const result = computeResult(m, sheetsById.get(m.sheetId), layersById.get(m.layerId))
+    const t = totals.get(m.itemPresetId) ?? { count: 0, countWithWaste: 0 }
+    t.count += result.count ?? 0
+    t.countWithWaste += result.countWithWaste ?? result.count ?? 0
+    totals.set(m.itemPresetId, t)
+  }
+
+  return itemPresets
+    .filter((p) => totals.has(p.id))
+    .map((p) => ({ preset: p, ...totals.get(p.id)! }))
+    .sort((a, b) => a.preset.name.localeCompare(b.preset.name))
 }

@@ -1,4 +1,4 @@
-import { saveProject } from '../lib/db'
+import { deleteItemPresetRecord, putItemPreset, saveProject } from '../lib/db'
 import { useProjectStore } from './useProjectStore'
 
 /**
@@ -23,6 +23,33 @@ export function initAutosave(): () => void {
     saveProject(state.project).catch((err) => {
       console.error('Failed to autosave project', err)
     })
+  })
+  return unsubscribe
+}
+
+/**
+ * Item presets are saved across all projects (IndexedDB "itemPresets"
+ * store), not inside any one project's JSON. Mirrors initAutosave's
+ * "write immediately on change" approach; the list is always small, so
+ * re-writing every preset on each change (and deleting any that were
+ * removed) is cheap.
+ */
+export function initItemPresetsAutosave(): () => void {
+  let lastItemPresetsRef: unknown = null
+  let lastIds = new Set<string>()
+  const unsubscribe = useProjectStore.subscribe((state) => {
+    if (state.itemPresets === lastItemPresetsRef) return
+    lastItemPresetsRef = state.itemPresets
+    const ids = new Set(state.itemPresets.map((p) => p.id))
+    for (const id of lastIds) {
+      if (!ids.has(id)) {
+        deleteItemPresetRecord(id).catch((err) => console.error('Failed to delete item preset', err))
+      }
+    }
+    for (const preset of state.itemPresets) {
+      putItemPreset(preset).catch((err) => console.error('Failed to save item preset', err))
+    }
+    lastIds = ids
   })
   return unsubscribe
 }

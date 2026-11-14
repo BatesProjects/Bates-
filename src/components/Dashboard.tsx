@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { deleteProjectAndBlobs, listProjects } from '../lib/db'
 import { importProjectJson } from '../lib/exportImport'
+import { migrateProject } from '../lib/project'
 import type { Project } from '../lib/types'
 import { useProjectStore } from '../store/useProjectStore'
 import { ProjectCard } from './ProjectCard'
@@ -20,7 +21,7 @@ export function Dashboard() {
   useEffect(() => {
     let cancelled = false
     listProjects().then((all) => {
-      if (!cancelled) setProjects(sortByRecent(all))
+      if (!cancelled) setProjects(sortByRecent(all.map(migrateProject)))
     })
     return () => {
       cancelled = true

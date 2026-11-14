@@ -55,7 +55,14 @@ export function computeResult(measurement: Measurement, sheet: Sheet | undefined
       }
     }
     case 'count': {
-      return { measurement, uncalibrated, count: 1 }
+      const count = measurement.points.length
+      return {
+        measurement,
+        uncalibrated,
+        count,
+        wastePercent,
+        countWithWaste: wastePercent ? Math.ceil(count * (1 + wastePercent / 100)) : undefined,
+      }
     }
     case 'radius': {
       const radiusM = pxToM(measurement.radiusPx, ppm)
@@ -101,8 +108,11 @@ export function measurementCentroid(measurement: Measurement): { x: number; y: n
       const sum = pts.reduce((acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }), { x: 0, y: 0 })
       return { x: sum.x / pts.length, y: sum.y / pts.length }
     }
-    case 'count':
-      return measurement.point
+    case 'count': {
+      const pts = measurement.points
+      const sum = pts.reduce((acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }), { x: 0, y: 0 })
+      return { x: sum.x / pts.length, y: sum.y / pts.length }
+    }
     case 'radius':
       return measurement.center
     default:

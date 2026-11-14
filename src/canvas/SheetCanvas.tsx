@@ -32,29 +32,13 @@ function screenPointFromEvent(evt: MouseEvent | WheelEvent, container: HTMLEleme
   return { x: evt.clientX - rect.left, y: evt.clientY - rect.top }
 }
 
-function buildCountIndex(measurements: Measurement[]): Map<string, number> {
-  const byLayer = new Map<string, Measurement[]>()
-  for (const m of measurements) {
-    if (m.type !== 'count') continue
-    const arr = byLayer.get(m.layerId) ?? []
-    arr.push(m)
-    byLayer.set(m.layerId, arr)
-  }
-  const index = new Map<string, number>()
-  for (const arr of byLayer.values()) {
-    arr.sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-    arr.forEach((m, i) => index.set(m.id, i + 1))
-  }
-  return index
-}
-
 /** Every vertex on the sheet a new point might want to snap onto: other measurements' points, plus the current draft's own. */
 function collectSnapCandidates(measurements: Measurement[], draftPoints: Point[]): Point[] {
   const points: Point[] = [...draftPoints]
   for (const m of measurements) {
     if (m.type === 'area' || m.type === 'length' || m.type === 'wall') points.push(...m.points)
     else if (m.type === 'radius') points.push(m.center)
-    else if (m.type === 'count') points.push(m.point)
+    else if (m.type === 'count') points.push(...m.points)
   }
   return points
 }
@@ -84,6 +68,10 @@ export function SheetCanvas({ sheet }: { sheet: Sheet }) {
   const pendingVerify = useProjectStore((s) => s.pendingVerify)
   const calibrationChooserOpen = useProjectStore((s) => s.calibrationChooserOpen)
   const cutoutTargetId = useProjectStore((s) => s.cutoutTargetId)
+  const itemPresets = useProjectStore((s) => s.itemPresets)
+  const activeItemPresetId = useProjectStore((s) => s.activeItemPresetId)
+  const setActiveItemPresetId = useProjectStore((s) => s.setActiveItemPresetId)
+  const openItemPresetsDialog = useProjectStore((s) => s.openItemPresetsDialog)
 
   const view = rawView ?? IDENTITY_VIEW
   const panMode = activeTool === 'pan' || spaceHeld
@@ -272,7 +260,6 @@ export function SheetCanvas({ sheet }: { sheet: Sheet }) {
     return screenDist < 10
   }
 
-  const countIndex = buildCountIndex(sheetMeasurements)
   const invScale = 1 / view.scale
   const sortedLayers = [...project.layers].sort((a, b) => a.order - b.order)
   const selectedMeasurement = sheetMeasurements.find((m) => m.id === selectedMeasurementId)
@@ -285,6 +272,29 @@ export function SheetCanvas({ sheet }: { sheet: Sheet }) {
       {cutoutTargetId && (
         <div className="absolute left-1/2 top-3 z-10 -translate-x-1/2 rounded bg-[#1c1f27] px-3 py-1.5 text-xs text-[#e4e7ec] shadow-lg ring-1 ring-[#333742]">
           Drawing a cut-out — trace the void, then close it. <span className="text-[#6d7686]">Esc to cancel.</span>
+        </div>
+      )}
+      {activeTool === 'count' && !cutoutTargetId && (
+        <div className="absolute left-1/2 top-3 z-10 flex -translate-x-1/2 items-center gap-2 rounded bg-[#1c1f27] px-3 py-1.5 text-xs text-[#e4e7ec] shadow-lg ring-1 ring-[#333742]">
+          <span className="text-[#8b93a3]">Item:</span>
+          <select
+            value={activeItemPresetId ?? ''}
+            onChange={(e) => setActiveItemPresetId(e.target.value || null)}
+            className="rounded bg-[#14161b] px-1.5 py-1 text-xs text-[#e4e7ec] outline-none ring-1 ring-[#333742]"
+          >
+            <option value="">Plain tally mark</option>
+            {itemPresets.map((ip) => (
+              <option key={ip.id} value={ip.id}>
+                {ip.name}
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={openItemPresetsDialog}
+            className="rounded border border-[#333742] px-1.5 py-1 text-[#c7cbd4] hover:border-[#5b8def]"
+          >
+            Manage items…
+          </button>
         </div>
       )}
       {size.width > 0 && size.height > 0 && (
@@ -317,7 +327,7 @@ export function SheetCanvas({ sheet }: { sheet: Sheet }) {
                   layer={layer}
                   measurements={sheetMeasurements.filter((m) => m.layerId === layer.id)}
                   invScale={invScale}
-                  countIndex={countIndex}
+                  itemPresets={itemPresets}
                 />
               ))}
             {selectedMeasurement &&

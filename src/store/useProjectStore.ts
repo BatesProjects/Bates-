@@ -1,9 +1,11 @@
 import { create } from 'zustand'
 import { IDENTITY_VIEW, type ViewTransform } from '../lib/coords'
 import { makeId } from '../lib/id'
-import { createDefaultLayer, createProject, nextLayerColor } from '../lib/project'
+import { LAYER_PALETTE, createDefaultLayer, createProject, migrateProject, nextLayerColor } from '../lib/project'
 import type {
   Calibration,
+  CountMeasurement,
+  ItemPreset,
   Layer,
   Measurement,
   MeasurementType,
@@ -60,6 +62,19 @@ interface ProjectStoreState {
   startCutout: (measurementId: string) => void
   cancelCutout: () => void
 
+  // --- item presets (saved across every project, not part of `project`) --
+  itemPresets: ItemPreset[]
+  loadItemPresets: (presets: ItemPreset[]) => void
+  addItemPreset: (preset?: Partial<Omit<ItemPreset, 'id'>>) => string
+  updateItemPreset: (id: string, patch: Partial<Omit<ItemPreset, 'id'>>) => void
+  deleteItemPreset: (id: string) => void
+  /** The item preset new count-tool clicks are grouped under. Null = plain, ungrouped tally marks (legacy behaviour). */
+  activeItemPresetId: string | null
+  setActiveItemPresetId: (id: string | null) => void
+  itemPresetsDialogOpen: boolean
+  openItemPresetsDialog: () => void
+  closeItemPresetsDialog: () => void
+
   // --- project lifecycle -----------------------------------------------
   loadProject: (project: Project) => void
   newProject: (name: string) => void
@@ -87,6 +102,7 @@ interface ProjectStoreState {
   // --- measurements -----------------------------------------------------
   addMeasurement: (measurement: Measurement) => void
   addCountMarker: (sheetId: string, point: Point) => void
+  removeCountMarker: (measurementId: string, index: number) => void
   updateMeasurement: (id: string, patch: Partial<Measurement>) => void
   deleteMeasurement: (id: string) => void
   deleteMeasurements: (ids: string[]) => void
@@ -172,9 +188,42 @@ export const useProjectStore = create<ProjectStoreState>((set, get) => ({
     }),
   cancelCutout: () => set({ cutoutTargetId: null }),
 
+  itemPresets: [],
+  loadItemPresets: (presets) => set({ itemPresets: presets }),
+  addItemPreset: (preset) => {
+    const id = makeId()
+    set((s) => ({
+      itemPresets: [
+        ...s.itemPresets,
+        {
+          id,
+          name: preset?.name ?? `Item ${s.itemPresets.length + 1}`,
+          color: preset?.color ?? LAYER_PALETTE[s.itemPresets.length % LAYER_PALETTE.length],
+          markerShape: preset?.markerShape ?? 'circle',
+          defaultHeightM: preset?.defaultHeightM,
+          defaultWastePercent: preset?.defaultWastePercent,
+          costCode: preset?.costCode,
+        },
+      ],
+    }))
+    return id
+  },
+  updateItemPreset: (id, patch) =>
+    set((s) => ({ itemPresets: s.itemPresets.map((p) => (p.id === id ? { ...p, ...patch } : p)) })),
+  deleteItemPreset: (id) =>
+    set((s) => ({
+      itemPresets: s.itemPresets.filter((p) => p.id !== id),
+      activeItemPresetId: s.activeItemPresetId === id ? null : s.activeItemPresetId,
+    })),
+  activeItemPresetId: null,
+  setActiveItemPresetId: (id) => set({ activeItemPresetId: id }),
+  itemPresetsDialogOpen: false,
+  openItemPresetsDialog: () => set({ itemPresetsDialogOpen: true }),
+  closeItemPresetsDialog: () => set({ itemPresetsDialogOpen: false }),
+
   loadProject: (project) =>
     set({
-      project,
+      project: migrateProject(project),
       past: [],
       future: [],
       selectedMeasurementId: null,
@@ -184,6 +233,7 @@ export const useProjectStore = create<ProjectStoreState>((set, get) => ({
       calibrationChooserOpen: false,
       pendingVerify: null,
       activeTool: 'select',
+      activeItemPresetId: null,
       screen: 'takeoff',
     }),
 
@@ -199,6 +249,7 @@ export const useProjectStore = create<ProjectStoreState>((set, get) => ({
       calibrationChooserOpen: false,
       pendingVerify: null,
       activeTool: 'select',
+      activeItemPresetId: null,
       screen: 'takeoff',
     }),
 
@@ -337,18 +388,69 @@ export const useProjectStore = create<ProjectStoreState>((set, get) => ({
       const layerId = p.activeLayerId
       if (!layerId) return p
       const now = new Date().toISOString()
+      const activeItemPresetId = get().activeItemPresetId
+
+      // No active item: a plain, ungrouped tally mark (legacy behaviour).
+      if (!activeItemPresetId) {
+        const measurement: Measurement = {
+          id: makeId(),
+          projectId: p.id,
+          sheetId,
+          layerId,
+          type: 'count',
+          label: nextMeasurementLabel(p, layerId, 'count'),
+          points: [point],
+          createdAt: now,
+          updatedAt: now,
+        }
+        return { ...p, measurements: [...p.measurements, measurement] }
+      }
+
+      // An active item: clicks on the same sheet+layer+item accumulate onto one group.
+      const existing = p.measurements.find(
+        (m): m is CountMeasurement =>
+          m.type === 'count' && m.sheetId === sheetId && m.layerId === layerId && m.itemPresetId === activeItemPresetId,
+      )
+      if (existing) {
+        return {
+          ...p,
+          measurements: p.measurements.map((m) =>
+            m.id === existing.id ? { ...existing, points: [...existing.points, point], updatedAt: now } : m,
+          ),
+        }
+      }
+      const preset = get().itemPresets.find((ip) => ip.id === activeItemPresetId)
       const measurement: Measurement = {
         id: makeId(),
         projectId: p.id,
         sheetId,
         layerId,
         type: 'count',
-        label: nextMeasurementLabel(p, layerId, 'count'),
-        point,
+        label: preset?.name ?? nextMeasurementLabel(p, layerId, 'count'),
+        points: [point],
+        itemPresetId: activeItemPresetId,
+        heightM: preset?.defaultHeightM,
+        wasteOverridePercent: preset?.defaultWastePercent,
         createdAt: now,
         updatedAt: now,
       }
       return { ...p, measurements: [...p.measurements, measurement] }
+    }),
+
+  removeCountMarker: (measurementId, index) =>
+    commit(set, get, (p) => {
+      const m = p.measurements.find((mm) => mm.id === measurementId)
+      if (!m || m.type !== 'count') return p
+      const points = m.points.filter((_, i) => i !== index)
+      if (points.length === 0) {
+        return { ...p, measurements: p.measurements.filter((mm) => mm.id !== measurementId) }
+      }
+      return {
+        ...p,
+        measurements: p.measurements.map((mm) =>
+          mm.id === measurementId ? { ...mm, points, updatedAt: new Date().toISOString() } : mm,
+        ),
+      }
     }),
 
   updateMeasurement: (id, patch) =>

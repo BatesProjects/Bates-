@@ -1,5 +1,6 @@
 import { CalibrationDialog } from './CalibrationDialog'
 import { EmptyProjectState } from './EmptyProjectState'
+import { ItemPresetsDialog } from './ItemPresetsDialog'
 import { RightPanel } from './RightPanel'
 import { StatusBar } from './StatusBar'
 import { ThumbnailSidebar } from './ThumbnailSidebar'
@@ -22,6 +23,7 @@ export function TakeoffScreen({ project }: { project: Project }) {
           {activeSheet ? <SheetCanvas sheet={activeSheet} /> : <EmptyProjectState />}
           <CalibrationDialog />
           <VerifyScaleDialog />
+          <ItemPresetsDialog />
         </div>
         <RightPanel />
       </div>

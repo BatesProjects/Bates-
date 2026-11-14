@@ -1,7 +1,8 @@
 import { useEffect } from 'react'
 import { Dashboard } from './components/Dashboard'
 import { TakeoffScreen } from './components/TakeoffScreen'
-import { initAutosave } from './store/persist'
+import { listItemPresets } from './lib/db'
+import { initAutosave, initItemPresetsAutosave } from './store/persist'
 import { useProjectStore } from './store/useProjectStore'
 
 export default function App() {
@@ -10,6 +11,14 @@ export default function App() {
 
   useEffect(() => {
     const unsubscribe = initAutosave()
+    return unsubscribe
+  }, [])
+
+  useEffect(() => {
+    listItemPresets()
+      .then((presets) => useProjectStore.getState().loadItemPresets(presets))
+      .catch((err) => console.error('Failed to load item presets', err))
+    const unsubscribe = initItemPresetsAutosave()
     return unsubscribe
   }, [])
 

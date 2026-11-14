@@ -1,16 +1,17 @@
 import * as XLSX from 'xlsx'
 import { computeResult } from './measure'
-import { buildSummary } from './summary'
-import type { Project } from './types'
+import { buildItemSummary, buildSummary } from './summary'
+import type { ItemPreset, Project } from './types'
 
 function round(n: number | undefined, digits = 2): number | '' {
   if (n === undefined) return ''
   return Number(n.toFixed(digits))
 }
 
-export function exportWorkbook(project: Project): void {
+export function exportWorkbook(project: Project, itemPresets: ItemPreset[] = []): void {
   const wb = XLSX.utils.book_new()
   const sheetsById = new Map(project.sheets.map((s) => [s.id, s]))
+  const itemPresetsById = new Map(itemPresets.map((p) => [p.id, p]))
 
   // --- Summary tab: grouped by layer, with subtotals + grand totals ------
   const summary = buildSummary(project)
@@ -19,7 +20,17 @@ export function exportWorkbook(project: Project): void {
     ['Project', project.name],
     ['Exported', new Date().toLocaleString()],
     [],
-    ['Layer', 'Waste %', 'Area (m²)', 'Area incl. waste (m²)', 'Volume (m³)', 'Length (m)', 'Length incl. waste (m)', 'Count (no.)'],
+    [
+      'Layer',
+      'Waste %',
+      'Area (m²)',
+      'Area incl. waste (m²)',
+      'Volume (m³)',
+      'Length (m)',
+      'Length incl. waste (m)',
+      'Count (no.)',
+      'Count incl. waste (no.)',
+    ],
   ]
   for (const ls of summary.layers) {
     if (ls.results.length === 0) continue
@@ -32,6 +43,7 @@ export function exportWorkbook(project: Project): void {
       round(ls.totals.lengthM) || '',
       ls.totals.lengthMWithWaste > ls.totals.lengthM ? round(ls.totals.lengthMWithWaste) : '',
       ls.totals.count || '',
+      ls.totals.countWithWaste > ls.totals.count ? ls.totals.countWithWaste : '',
     ])
   }
   summaryRows.push([])
@@ -44,10 +56,42 @@ export function exportWorkbook(project: Project): void {
     round(summary.grandTotals.lengthM) || '',
     summary.grandTotals.lengthMWithWaste > summary.grandTotals.lengthM ? round(summary.grandTotals.lengthMWithWaste) : '',
     summary.grandTotals.count || '',
+    summary.grandTotals.countWithWaste > summary.grandTotals.count ? summary.grandTotals.countWithWaste : '',
   ])
   const summarySheet = XLSX.utils.aoa_to_sheet(summaryRows)
-  summarySheet['!cols'] = [{ wch: 24 }, { wch: 9 }, { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 12 }]
+  summarySheet['!cols'] = [
+    { wch: 24 },
+    { wch: 9 },
+    { wch: 12 },
+    { wch: 14 },
+    { wch: 12 },
+    { wch: 12 },
+    { wch: 14 },
+    { wch: 12 },
+    { wch: 16 },
+  ]
   XLSX.utils.book_append_sheet(wb, summarySheet, 'Summary')
+
+  // --- Items tab: every saved item preset in use, totalled across layers/sheets ---
+  const itemSummary = buildItemSummary(project, itemPresets)
+  if (itemSummary.length > 0) {
+    const itemRows: (string | number)[][] = [
+      ['Item', 'Cost code', 'Height (m)', 'Waste %', 'Count (no.)', 'Count incl. waste (no.)'],
+    ]
+    for (const row of itemSummary) {
+      itemRows.push([
+        row.preset.name,
+        row.preset.costCode ?? '',
+        round(row.preset.defaultHeightM) || '',
+        row.preset.defaultWastePercent || '',
+        row.count,
+        row.countWithWaste > row.count ? row.countWithWaste : '',
+      ])
+    }
+    const itemsSheet = XLSX.utils.aoa_to_sheet(itemRows)
+    itemsSheet['!cols'] = [{ wch: 20 }, { wch: 14 }, { wch: 12 }, { wch: 9 }, { wch: 12 }, { wch: 18 }]
+    XLSX.utils.book_append_sheet(wb, itemsSheet, 'Items')
+  }
 
   // --- Raw measurements tab: one row per measurement ----------------------
   const header = [
@@ -55,6 +99,8 @@ export function exportWorkbook(project: Project): void {
     'Layer',
     'Type',
     'Label',
+    'Item preset',
+    'Cost code',
     'Length (m)',
     'Width (m)',
     'Height (m)',
@@ -69,6 +115,7 @@ export function exportWorkbook(project: Project): void {
     'Gross area (m²)',
     'Openings (m²)',
     'Count',
+    'Count incl. waste',
     'Waste %',
     'Area incl. waste (m²)',
     'Length incl. waste (m)',
@@ -81,14 +128,17 @@ export function exportWorkbook(project: Project): void {
     const sheet = sheetsById.get(m.sheetId)
     const layer = project.layers.find((l) => l.id === m.layerId)
     const result = computeResult(m, sheet, layer)
+    const preset = m.type === 'count' && m.itemPresetId ? itemPresetsById.get(m.itemPresetId) : undefined
     rows.push([
       sheet?.name ?? '—',
       layer?.name ?? '—',
       m.type,
       m.label,
+      preset?.name ?? '',
+      preset?.costCode ?? '',
       m.type === 'length' || m.type === 'wall' ? round(result.lengthM) : m.type === 'radius' ? round(result.lengthM) : '',
       m.type === 'length' ? round(m.width) : '',
-      m.type === 'wall' ? round(m.heightM) : '',
+      m.type === 'wall' ? round(m.heightM) : m.type === 'count' ? round(m.heightM) : '',
       m.type === 'area' || m.type === 'length' || m.type === 'radius' || m.type === 'wall' ? round(result.areaM2) : '',
       m.type === 'area' ? round(result.perimeterM) : '',
       m.type === 'area' ? round(m.depth) : '',
@@ -99,7 +149,8 @@ export function exportWorkbook(project: Project): void {
       m.type === 'area' ? round(result.cutoutAreaM2) : '',
       m.type === 'wall' ? round(result.grossAreaM2) : '',
       m.type === 'wall' ? round(result.openingsAreaM2) : '',
-      m.type === 'count' ? 1 : '',
+      m.type === 'count' ? result.count ?? '' : '',
+      m.type === 'count' && result.countWithWaste !== undefined ? result.countWithWaste : '',
       result.wastePercent || '',
       round(result.areaM2WithWaste),
       round(result.lengthMWithWaste),

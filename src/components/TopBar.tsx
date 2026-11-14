@@ -7,6 +7,7 @@ export function TopBar() {
   const project = useProjectStore((s) => s.project)
   const renameProject = useProjectStore((s) => s.renameProject)
   const goToDashboard = useProjectStore((s) => s.goToDashboard)
+  const itemPresets = useProjectStore((s) => s.itemPresets)
   const [editingName, setEditingName] = useState(false)
   const [nameDraft, setNameDraft] = useState('')
 
@@ -85,7 +86,7 @@ export function TopBar() {
 
       <button
         className="rounded bg-[#5b8def] px-3 py-1.5 text-xs font-semibold text-[#0b1220] hover:bg-[#79a3f2]"
-        onClick={() => exportWorkbook(project)}
+        onClick={() => exportWorkbook(project, itemPresets)}
       >
         Export XLSX
       </button>

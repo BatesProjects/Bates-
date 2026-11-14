@@ -1,6 +1,6 @@
-import { Circle, Group, Line, Text } from 'react-konva'
+import { Circle, Group, Line, RegularPolygon, Rect, Text } from 'react-konva'
 import { computeResult } from '../lib/measure'
-import type { Layer, Measurement, Sheet } from '../lib/types'
+import type { ItemPreset, Layer, Measurement, Sheet } from '../lib/types'
 import { useProjectStore } from '../store/useProjectStore'
 
 function hexToRgba(hex: string, alpha: number): string {
@@ -19,18 +19,44 @@ function fmt(n: number | undefined, digits = 2): string {
   return n.toFixed(digits)
 }
 
+/** Renders a count marker's shape, distinguishing item presets drawn on the same layer at a glance. */
+function MarkerShape({ shape, x, y, radius, fill, stroke, strokeWidth, onClick, onTap, listening }: {
+  shape: ItemPreset['markerShape']
+  x: number
+  y: number
+  radius: number
+  fill: string
+  stroke: string
+  strokeWidth: number
+  onClick?: (e: { cancelBubble: boolean }) => void
+  onTap?: (e: { cancelBubble: boolean }) => void
+  listening: boolean
+}) {
+  const common = { fill, stroke, strokeWidth, onClick, onTap, listening }
+  if (shape === 'square') {
+    return <Rect x={x - radius} y={y - radius} width={radius * 2} height={radius * 2} {...common} />
+  }
+  if (shape === 'triangle') {
+    return <RegularPolygon x={x} y={y} sides={3} radius={radius * 1.15} {...common} />
+  }
+  if (shape === 'diamond') {
+    return <RegularPolygon x={x} y={y} sides={4} radius={radius * 1.15} rotation={45} {...common} />
+  }
+  return <Circle x={x} y={y} radius={radius} {...common} />
+}
+
 export function MeasurementShapes({
   sheet,
   measurements,
   layer,
   invScale,
-  countIndex,
+  itemPresets,
 }: {
   sheet: Sheet
   measurements: Measurement[]
   layer: Layer
   invScale: number
-  countIndex: Map<string, number>
+  itemPresets: ItemPreset[]
 }) {
   const selectedId = useProjectStore((s) => s.selectedMeasurementId)
   const selectMeasurement = useProjectStore((s) => s.selectMeasurement)
@@ -183,34 +209,55 @@ export function MeasurementShapes({
           )
         }
 
-        // count
-        const idx = countIndex.get(m.id) ?? 0
+        // count: one group of markers, optionally tied to a saved item preset
+        const preset = m.itemPresetId ? itemPresets.find((ip) => ip.id === m.itemPresetId) : undefined
+        const markerColor = preset?.color ?? layer.color
+        const shape = preset?.markerShape ?? 'circle'
+        const last = m.points[m.points.length - 1]
         return (
           <Group key={m.id}>
-            <Circle
-              x={m.point.x}
-              y={m.point.y}
-              radius={9 * invScale}
-              fill={layer.color}
-              stroke={selected ? '#ffffff' : 'rgba(0,0,0,0.4)'}
-              strokeWidth={(selected ? 2 : 1) * invScale}
-              onClick={onClick}
-              onTap={onClick}
-              listening={selectable}
-            />
-            <Text
-              x={m.point.x}
-              y={m.point.y}
-              text={String(idx)}
-              fontSize={10 * invScale}
-              fill="#0b1220"
-              fontStyle="bold"
-              align="center"
-              verticalAlign="middle"
-              offsetX={5 * invScale}
-              offsetY={5 * invScale}
-              listening={false}
-            />
+            {m.points.map((pt, i) => (
+              <MarkerShape
+                key={i}
+                shape={shape}
+                x={pt.x}
+                y={pt.y}
+                radius={9 * invScale}
+                fill={markerColor}
+                stroke={selected ? '#ffffff' : 'rgba(0,0,0,0.4)'}
+                strokeWidth={(selected ? 2 : 1) * invScale}
+                onClick={onClick}
+                onTap={onClick}
+                listening={selectable}
+              />
+            ))}
+            {m.points.map((pt, i) => (
+              <Text
+                key={i}
+                x={pt.x}
+                y={pt.y}
+                text={String(i + 1)}
+                fontSize={10 * invScale}
+                fill="#0b1220"
+                fontStyle="bold"
+                align="center"
+                verticalAlign="middle"
+                offsetX={5 * invScale}
+                offsetY={5 * invScale}
+                listening={false}
+              />
+            ))}
+            {last && (
+              <Text
+                x={last.x}
+                y={last.y}
+                text={`${m.label} – ${m.points.length}`}
+                fontSize={11 * invScale}
+                fill="#e4e7ec"
+                offsetY={-14 * invScale}
+                listening={false}
+              />
+            )}
           </Group>
         )
       })}

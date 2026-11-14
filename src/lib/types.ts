@@ -102,8 +102,28 @@ export interface LengthMeasurement extends MeasurementBase {
 
 export interface CountMeasurement extends MeasurementBase {
   type: 'count'
-  /** A single tally mark. Each click of the count tool creates its own numbered marker/measurement. */
-  point: Point
+  /** One marker per click. Clicks made against the same active item preset accumulate here instead of each creating a separate measurement. */
+  points: Point[]
+  /** Links this group to a saved item preset (name, colour, marker shape, cost code, ...), when one was active while placing the markers. */
+  itemPresetId?: string
+  /** Optional mounting/fixing height in metres, carried from the item preset's default for reference in the summary/export. */
+  heightM?: number
+}
+
+export type MarkerShape = 'circle' | 'square' | 'triangle' | 'diamond'
+
+/** A reusable item definition (e.g. "Downlights", "GPO") saved across all projects, not just one. */
+export interface ItemPreset {
+  id: string
+  name: string
+  color: string
+  markerShape: MarkerShape
+  /** Metres. Applied to a new count group's heightM when created from this preset. */
+  defaultHeightM?: number
+  /** Applied to a new count group's wasteOverridePercent when created from this preset. */
+  defaultWastePercent?: number
+  /** Free-text cost/budget code, carried through to the summary and XLSX export. */
+  costCode?: string
 }
 
 export interface RadiusMeasurement extends MeasurementBase {
@@ -162,6 +182,8 @@ export interface MeasurementResult {
   areaM2?: number
   volumeM3?: number
   count?: number
+  /** count inflated by wastePercent and rounded up, when a waste % applies (count type). */
+  countWithWaste?: number
   /** Area as drawn in plan view, before the pitch adjustment (area type, pitchDeg set). */
   planAreaM2?: number
   /** Total area removed by cut-outs (area type). */

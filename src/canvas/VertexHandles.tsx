@@ -12,7 +12,7 @@ function flatten(points: Point[]): number[] {
 function extractPoints(m: Measurement): Point[] {
   if (m.type === 'area' || m.type === 'length' || m.type === 'wall') return m.points
   if (m.type === 'radius') return [m.center, { x: m.center.x + m.radiusPx, y: m.center.y }]
-  if (m.type === 'count') return [m.point]
+  if (m.type === 'count') return m.points
   return []
 }
 
@@ -36,7 +36,7 @@ export function VertexHandles({ measurement, invScale, color }: { measurement: M
         radiusPx: Math.hypot(edge.x - center.x, edge.y - center.y),
       } as Partial<Measurement>)
     } else if (measurement.type === 'count') {
-      updateMeasurement(measurement.id, { point: nextPoints[0] } as Partial<Measurement>)
+      updateMeasurement(measurement.id, { points: nextPoints } as Partial<Measurement>)
     }
   }
 
