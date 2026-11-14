@@ -124,6 +124,10 @@ interface ProjectStoreState {
   // --- view (zoom/pan) ------------------------------------------------
   setView: (sheetId: string, view: ViewTransform) => void
   getView: (sheetId: string) => ViewTransform
+  /** Set to re-centre the canvas on a sheet-space point (e.g. "jump to this measurement" from the summary panel); consumed once by SheetCanvas. */
+  pendingFocusPoint: { sheetId: string; point: Point } | null
+  focusOnPoint: (sheetId: string, point: Point) => void
+  clearPendingFocusPoint: () => void
 
   // --- history ------------------------------------------------------
   undo: () => void
@@ -234,6 +238,7 @@ export const useProjectStore = create<ProjectStoreState>((set, get) => ({
       pendingVerify: null,
       activeTool: 'select',
       activeItemPresetId: null,
+      pendingFocusPoint: null,
       screen: 'takeoff',
     }),
 
@@ -250,6 +255,7 @@ export const useProjectStore = create<ProjectStoreState>((set, get) => ({
       pendingVerify: null,
       activeTool: 'select',
       activeItemPresetId: null,
+      pendingFocusPoint: null,
       screen: 'takeoff',
     }),
 
@@ -581,6 +587,9 @@ export const useProjectStore = create<ProjectStoreState>((set, get) => ({
 
   setView: (sheetId, view) => set((s) => ({ views: { ...s.views, [sheetId]: view } })),
   getView: (sheetId) => get().views[sheetId] ?? IDENTITY_VIEW,
+  pendingFocusPoint: null,
+  focusOnPoint: (sheetId, point) => set({ pendingFocusPoint: { sheetId, point } }),
+  clearPendingFocusPoint: () => set({ pendingFocusPoint: null }),
 
   undo: () =>
     set((s) => {

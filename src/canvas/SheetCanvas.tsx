@@ -72,6 +72,8 @@ export function SheetCanvas({ sheet }: { sheet: Sheet }) {
   const activeItemPresetId = useProjectStore((s) => s.activeItemPresetId)
   const setActiveItemPresetId = useProjectStore((s) => s.setActiveItemPresetId)
   const openItemPresetsDialog = useProjectStore((s) => s.openItemPresetsDialog)
+  const pendingFocusPoint = useProjectStore((s) => s.pendingFocusPoint)
+  const clearPendingFocusPoint = useProjectStore((s) => s.clearPendingFocusPoint)
 
   const view = rawView ?? IDENTITY_VIEW
   const panMode = activeTool === 'pan' || spaceHeld
@@ -88,6 +90,19 @@ export function SheetCanvas({ sheet }: { sheet: Sheet }) {
     setView(sheet.id, { scale, offsetX, offsetY })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rawView, size.width, size.height, sheet.id])
+
+  // "Jump to this measurement" from the summary panel: re-centre on its
+  // point at whatever zoom this sheet is currently at, so it's actually in
+  // view instead of just switching sheets and leaving the pan/zoom as-is.
+  useEffect(() => {
+    if (!pendingFocusPoint || pendingFocusPoint.sheetId !== sheet.id || size.width === 0 || size.height === 0) return
+    const scale = (rawView ?? IDENTITY_VIEW).scale
+    const offsetX = size.width / 2 - pendingFocusPoint.point.x * scale
+    const offsetY = size.height / 2 - pendingFocusPoint.point.y * scale
+    setView(sheet.id, { scale, offsetX, offsetY })
+    clearPendingFocusPoint()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingFocusPoint, size.width, size.height, sheet.id])
 
   if (!project) return null
 

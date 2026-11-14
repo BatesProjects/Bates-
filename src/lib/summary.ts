@@ -1,5 +1,5 @@
-import { computeResult } from './measure'
-import type { ItemPreset, Layer, Measurement, MeasurementResult, Project } from './types'
+import { computeResult, measurementCentroid } from './measure'
+import type { ItemPreset, Layer, Measurement, MeasurementResult, Point, Project } from './types'
 
 export interface LayerSummary {
   layer: Layer
@@ -27,6 +27,8 @@ export interface ItemSummaryRow {
   preset: ItemPreset
   count: number
   countWithWaste: number
+  /** Every count group using this preset, so the UI can jump straight to one on a specific sheet. */
+  groups: { measurementId: string; sheetId: string; sheetName: string; layerId: string; pointCount: number; centroid: Point }[]
 }
 
 function emptyTotals(): LayerSummary['totals'] {
@@ -81,14 +83,22 @@ export function buildSummary(project: Project, measurements?: Measurement[]): Pr
 export function buildItemSummary(project: Project, itemPresets: ItemPreset[]): ItemSummaryRow[] {
   const sheetsById = new Map(project.sheets.map((s) => [s.id, s]))
   const layersById = new Map(project.layers.map((l) => [l.id, l]))
-  const totals = new Map<string, { count: number; countWithWaste: number }>()
+  const totals = new Map<string, { count: number; countWithWaste: number; groups: ItemSummaryRow['groups'] }>()
 
   for (const m of project.measurements) {
     if (m.type !== 'count' || !m.itemPresetId) continue
     const result = computeResult(m, sheetsById.get(m.sheetId), layersById.get(m.layerId))
-    const t = totals.get(m.itemPresetId) ?? { count: 0, countWithWaste: 0 }
+    const t = totals.get(m.itemPresetId) ?? { count: 0, countWithWaste: 0, groups: [] }
     t.count += result.count ?? 0
     t.countWithWaste += result.countWithWaste ?? result.count ?? 0
+    t.groups.push({
+      measurementId: m.id,
+      sheetId: m.sheetId,
+      sheetName: sheetsById.get(m.sheetId)?.name ?? '—',
+      layerId: m.layerId,
+      pointCount: m.points.length,
+      centroid: measurementCentroid(m),
+    })
     totals.set(m.itemPresetId, t)
   }
 

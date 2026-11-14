@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { buildItemSummary, buildSummary } from '../lib/summary'
+import { measurementCentroid } from '../lib/measure'
+import { buildItemSummary, buildSummary, type ItemSummaryRow } from '../lib/summary'
 import type { AreaMeasurement, CountMeasurement, Measurement, MeasurementResult, WallMeasurement, WallOpening } from '../lib/types'
 import { makeId } from '../lib/id'
 import { useProjectStore } from '../store/useProjectStore'
@@ -207,6 +208,7 @@ function ResultRow({ result }: { result: MeasurementResult }) {
   const renameMeasurement = useProjectStore((s) => s.renameMeasurement)
   const updateMeasurement = useProjectStore((s) => s.updateMeasurement)
   const setActiveSheet = useProjectStore((s) => s.setActiveSheet)
+  const focusOnPoint = useProjectStore((s) => s.focusOnPoint)
   const project = useProjectStore((s) => s.project)
   const itemPresets = useProjectStore((s) => s.itemPresets)
   const [editing, setEditing] = useState(false)
@@ -218,6 +220,7 @@ function ResultRow({ result }: { result: MeasurementResult }) {
   function focusMeasurement() {
     if (project && project.activeSheetId !== m.sheetId) setActiveSheet(m.sheetId)
     selectMeasurement(m.id)
+    focusOnPoint(m.sheetId, measurementCentroid(m))
   }
 
   let valueText = ''
@@ -379,6 +382,31 @@ function ResultRow({ result }: { result: MeasurementResult }) {
   )
 }
 
+function ItemGroupChip({ group }: { group: ItemSummaryRow['groups'][number] }) {
+  const setActiveSheet = useProjectStore((s) => s.setActiveSheet)
+  const selectMeasurement = useProjectStore((s) => s.selectMeasurement)
+  const toggleLayerVisible = useProjectStore((s) => s.toggleLayerVisible)
+  const focusOnPoint = useProjectStore((s) => s.focusOnPoint)
+  const project = useProjectStore((s) => s.project)
+  const layer = project?.layers.find((l) => l.id === group.layerId)
+
+  return (
+    <button
+      onClick={(e) => {
+        e.stopPropagation()
+        if (project && project.activeSheetId !== group.sheetId) setActiveSheet(group.sheetId)
+        if (layer && !layer.visible) toggleLayerVisible(layer.id)
+        selectMeasurement(group.measurementId)
+        focusOnPoint(group.sheetId, group.centroid)
+      }}
+      title={`Jump to these ${group.pointCount} marker(s) on "${group.sheetName}"${layer && !layer.visible ? ' (its layer is hidden — this will show it)' : ''}`}
+      className="rounded border border-[#333742] px-1.5 py-0.5 text-[10px] text-[#8b93a3] hover:border-[#5b8def] hover:text-[#c7cbd4]"
+    >
+      {group.sheetName} ({group.pointCount}){layer && !layer.visible && <span className="text-[#e8a53d]"> · hidden</span>}
+    </button>
+  )
+}
+
 export function MeasurementsPanel() {
   const project = useProjectStore((s) => s.project)
   const toggleLayerCollapsed = useProjectStore((s) => s.toggleLayerCollapsed)
@@ -471,16 +499,23 @@ export function MeasurementsPanel() {
             <div className="mb-1 px-0.5 text-[11px] font-medium text-[#6d7686]">By item</div>
             <div className="flex flex-col gap-0.5">
               {itemSummary.map((row) => (
-                <div key={row.preset.id} className="flex items-center gap-1.5 rounded px-1.5 py-1 text-xs">
-                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: row.preset.color }} />
-                  <span className="min-w-0 flex-1 truncate text-[#c7cbd4]">{row.preset.name}</span>
-                  {row.preset.costCode && <span className="shrink-0 text-[10px] text-[#6d7686]">{row.preset.costCode}</span>}
-                  <span className="shrink-0 text-[#8b93a3]">
-                    {row.count} no.
-                    {row.countWithWaste > row.count && (
-                      <span className="text-[#6d7686]"> ({row.countWithWaste} incl. waste)</span>
-                    )}
-                  </span>
+                <div key={row.preset.id} className="rounded px-1.5 py-1 text-xs">
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: row.preset.color }} />
+                    <span className="min-w-0 flex-1 truncate text-[#c7cbd4]">{row.preset.name}</span>
+                    {row.preset.costCode && <span className="shrink-0 text-[10px] text-[#6d7686]">{row.preset.costCode}</span>}
+                    <span className="shrink-0 text-[#8b93a3]">
+                      {row.count} no.
+                      {row.countWithWaste > row.count && (
+                        <span className="text-[#6d7686]"> ({row.countWithWaste} incl. waste)</span>
+                      )}
+                    </span>
+                  </div>
+                  <div className="mt-0.5 flex flex-wrap gap-1 pl-3.5">
+                    {row.groups.map((g) => (
+                      <ItemGroupChip key={g.measurementId} group={g} />
+                    ))}
+                  </div>
                 </div>
               ))}
             </div>
