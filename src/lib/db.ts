@@ -45,6 +45,20 @@ function getDb(): Promise<IDBPDatabase<TakeoffDB>> {
           db.createObjectStore('itemPresets', { keyPath: 'id' })
         }
       },
+      // If an older tab/window of this app is already open, its connection
+      // is still on the previous schema version and would otherwise block
+      // this one's upgrade forever (IndexedDB gives no error, it just never
+      // resolves — the dashboard looks "stuck" with no projects). Closing
+      // our own connection here lets whichever tab opened more recently
+      // (ours, since we're the one with the newer DB_VERSION) take over.
+      blocking() {
+        dbPromise?.then((db) => db.close())
+      },
+      blocked() {
+        console.error(
+          'IndexedDB upgrade blocked by another open tab/window of this app. Close every other tab with this app open, then reload.',
+        )
+      },
     })
   }
   return dbPromise

@@ -14,17 +14,32 @@ export function Dashboard() {
   const loadProject = useProjectStore((s) => s.loadProject)
   const newProject = useProjectStore((s) => s.newProject)
   const [projects, setProjects] = useState<Project[] | null>(null)
+  const [loadError, setLoadError] = useState(false)
+  const [slowLoad, setSlowLoad] = useState(false)
   const [creating, setCreating] = useState(false)
   const [nameDraft, setNameDraft] = useState('')
   const importInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     let cancelled = false
-    listProjects().then((all) => {
-      if (!cancelled) setProjects(sortByRecent(all.map(migrateProject)))
-    })
+    // IndexedDB can hang indefinitely (no error, no timeout) if an older
+    // tab/window of this app is still open and blocking a schema upgrade.
+    // Surface that instead of leaving "Loading projects..." up forever.
+    const slowTimer = setTimeout(() => {
+      if (!cancelled) setSlowLoad(true)
+    }, 4000)
+    listProjects()
+      .then((all) => {
+        if (!cancelled) setProjects(sortByRecent(all.map(migrateProject)))
+      })
+      .catch((err) => {
+        console.error('Failed to load projects', err)
+        if (!cancelled) setLoadError(true)
+      })
+      .finally(() => clearTimeout(slowTimer))
     return () => {
       cancelled = true
+      clearTimeout(slowTimer)
     }
   }, [])
 
@@ -117,7 +132,23 @@ export function Dashboard() {
           </div>
         )}
 
-        {projects === null && <div className="text-sm text-[#6d7686]">Loading projects…</div>}
+        {loadError && (
+          <div className="rounded-lg border border-[#c0392b]/40 bg-[#2a1c1c] px-4 py-3 text-sm text-[#e4a3a3]">
+            Couldn't load your projects. Close every other tab or window with this app open, then reload this page.
+          </div>
+        )}
+
+        {projects === null && !loadError && (
+          <div className="text-sm text-[#6d7686]">
+            Loading projects…
+            {slowLoad && (
+              <div className="mt-2 max-w-md text-xs text-[#8b6a3d]">
+                Taking longer than usual. If another tab or window with this app (old or new) is still open, close
+                it and reload this page — it's likely holding the saved-projects database open.
+              </div>
+            )}
+          </div>
+        )}
 
         {projects !== null && projects.length === 0 && !creating && (
           <div className="mt-16 flex flex-col items-center gap-2 text-center text-[#5b6270]">
