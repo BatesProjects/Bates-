@@ -213,7 +213,7 @@ export function MeasurementShapes({
         const preset = m.itemPresetId ? itemPresets.find((ip) => ip.id === m.itemPresetId) : undefined
         const markerColor = preset?.color ?? layer.color
         const shape = preset?.markerShape ?? 'circle'
-        const last = m.points[m.points.length - 1]
+        const tagName = preset?.name ?? m.label
         return (
           <Group key={m.id}>
             {m.points.map((pt, i) => (
@@ -233,7 +233,7 @@ export function MeasurementShapes({
             ))}
             {m.points.map((pt, i) => (
               <Text
-                key={i}
+                key={`idx-${i}`}
                 x={pt.x}
                 y={pt.y}
                 text={String(i + 1)}
@@ -247,17 +247,24 @@ export function MeasurementShapes({
                 listening={false}
               />
             ))}
-            {last && (
+            {/* The item's name next to every marker, not just one of them, so each tag is visible right where it was placed. */}
+            {m.points.map((pt, i) => (
               <Text
-                x={last.x}
-                y={last.y}
-                text={`${m.label} – ${m.points.length}`}
-                fontSize={11 * invScale}
+                key={`tag-${i}`}
+                x={pt.x}
+                y={pt.y}
+                text={tagName}
+                fontSize={10 * invScale}
                 fill="#e4e7ec"
-                offsetY={-14 * invScale}
+                fontStyle="bold"
+                shadowColor="#0b1220"
+                shadowBlur={3 * invScale}
+                shadowOpacity={0.9}
+                offsetX={-14 * invScale}
+                offsetY={4 * invScale}
                 listening={false}
               />
-            )}
+            ))}
           </Group>
         )
       })}
