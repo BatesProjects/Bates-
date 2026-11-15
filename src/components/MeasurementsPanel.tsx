@@ -545,6 +545,14 @@ export function MeasurementsPanel() {
                       <span className={`min-w-0 flex-1 truncate ${hidden ? 'text-[#5b6270]' : 'text-[#c7cbd4]'}`}>
                         {row.preset.name}
                       </span>
+                      {row.orphaned && (
+                        <span
+                          title="Its item preset was deleted earlier, before markers were deleted with it — these are the leftover markers. Delete them with the × here."
+                          className="shrink-0 rounded bg-[#3a2a16] px-1 text-[9px] text-[#e8a53d]"
+                        >
+                          preset deleted
+                        </span>
+                      )}
                       {row.preset.costCode && <span className="shrink-0 text-[10px] text-[#6d7686]">{row.preset.costCode}</span>}
                       <span className="shrink-0 text-[#8b93a3]">
                         {row.count} no.
@@ -574,7 +582,7 @@ export function MeasurementsPanel() {
                             deleteItemPresetAndMarkers(row.preset.id)
                           }
                         }}
-                        className="hidden shrink-0 text-[#8b93a3] hover:text-[#c0392b] group-hover:inline"
+                        className={`shrink-0 text-[#8b93a3] hover:text-[#c0392b] ${row.orphaned ? '' : 'hidden group-hover:inline'}`}
                       >
                         ×
                       </button>

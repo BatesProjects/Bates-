@@ -29,6 +29,8 @@ export interface ItemSummaryRow {
   countWithWaste: number
   /** Every count group using this preset, so the UI can jump straight to one on a specific sheet. */
   groups: { measurementId: string; sheetId: string; sheetName: string; layerId: string; pointCount: number; centroid: Point }[]
+  /** True when `preset` is a stand-in for an itemPresetId whose real preset was deleted (before markers were deleted with it) — these are otherwise-invisible leftover markers that still need somewhere to be found and removed. */
+  orphaned?: boolean
 }
 
 function emptyTotals(): LayerSummary['totals'] {
@@ -102,8 +104,27 @@ export function buildItemSummary(project: Project, itemPresets: ItemPreset[]): I
     totals.set(m.itemPresetId, t)
   }
 
-  return itemPresets
-    .filter((p) => totals.has(p.id))
-    .map((p) => ({ preset: p, ...totals.get(p.id)! }))
-    .sort((a, b) => a.preset.name.localeCompare(b.preset.name))
+  const presetsById = new Map(itemPresets.map((p) => [p.id, p]))
+  const rows: ItemSummaryRow[] = []
+  for (const [presetId, t] of totals) {
+    const preset = presetsById.get(presetId)
+    if (preset) {
+      rows.push({ preset, ...t })
+    } else {
+      // The preset behind this id no longer exists (deleted before its
+      // markers were, under the old delete behaviour). Surface it anyway,
+      // under whatever label its markers were created with, so it has
+      // somewhere to be found and deleted from.
+      const firstGroup = t.groups[0]
+      const layer = firstGroup ? project.layers.find((l) => l.id === firstGroup.layerId) : undefined
+      const label = project.measurements.find((m) => m.type === 'count' && m.itemPresetId === presetId)?.label ?? 'Deleted item'
+      rows.push({
+        preset: { id: presetId, name: label, color: layer?.color ?? '#8b93a3', markerShape: 'circle' },
+        ...t,
+        orphaned: true,
+      })
+    }
+  }
+
+  return rows.sort((a, b) => a.preset.name.localeCompare(b.preset.name))
 }
