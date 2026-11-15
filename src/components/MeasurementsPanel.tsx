@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { measurementCentroid } from '../lib/measure'
+import { LAYER_PALETTE } from '../lib/project'
 import { buildItemSummary, buildSummary, type ItemSummaryRow } from '../lib/summary'
 import type { AreaMeasurement, CountMeasurement, Measurement, MeasurementResult, WallMeasurement, WallOpening } from '../lib/types'
 import { makeId } from '../lib/id'
@@ -428,6 +429,20 @@ function EyeIcon({ visible }: { visible: boolean }) {
   )
 }
 
+function LockIcon({ locked }: { locked: boolean }) {
+  return locked ? (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+      <rect x="4" y="11" width="16" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M7 11V7a5 5 0 0110 0v4" stroke="currentColor" strokeWidth="1.8" />
+    </svg>
+  ) : (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+      <rect x="4" y="11" width="16" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M7 11V7a5 5 0 019.5-2.2" stroke="currentColor" strokeWidth="1.8" />
+    </svg>
+  )
+}
+
 export function MeasurementsPanel() {
   const project = useProjectStore((s) => s.project)
   const toggleLayerCollapsed = useProjectStore((s) => s.toggleLayerCollapsed)
@@ -436,6 +451,17 @@ export function MeasurementsPanel() {
   const toggleItemPresetVisible = useProjectStore((s) => s.toggleItemPresetVisible)
   const deleteItemPresetAndMarkers = useProjectStore((s) => s.deleteItemPresetAndMarkers)
   const itemPresets = useProjectStore((s) => s.itemPresets)
+  const addLayer = useProjectStore((s) => s.addLayer)
+  const renameLayer = useProjectStore((s) => s.renameLayer)
+  const setLayerColor = useProjectStore((s) => s.setLayerColor)
+  const toggleLayerVisible = useProjectStore((s) => s.toggleLayerVisible)
+  const toggleLayerLocked = useProjectStore((s) => s.toggleLayerLocked)
+  const setLayerWastePercent = useProjectStore((s) => s.setLayerWastePercent)
+  const removeLayer = useProjectStore((s) => s.removeLayer)
+  const setActiveLayer = useProjectStore((s) => s.setActiveLayer)
+  const [editingLayerId, setEditingLayerId] = useState<string | null>(null)
+  const [layerNameDraft, setLayerNameDraft] = useState('')
+  const [layerColorPickerId, setLayerColorPickerId] = useState<string | null>(null)
   if (!project) return null
 
   const summary = buildSummary(project)
@@ -450,14 +476,23 @@ export function MeasurementsPanel() {
         <span className="text-[11px] font-semibold uppercase tracking-wide text-[#6d7686]">
           Takeoff summary
         </span>
-        {nonEmptyLayers.length > 1 && (
+        <div className="flex items-center gap-2">
+          {nonEmptyLayers.length > 1 && (
+            <button
+              onClick={() => setAllLayersCollapsed(anyExpanded)}
+              className="text-[10px] text-[#6d7686] hover:text-[#c7cbd4]"
+            >
+              {anyExpanded ? 'Collapse all' : 'Expand all'}
+            </button>
+          )}
           <button
-            onClick={() => setAllLayersCollapsed(anyExpanded)}
-            className="text-[10px] text-[#6d7686] hover:text-[#c7cbd4]"
+            className="rounded px-1.5 py-0.5 text-[14px] leading-none text-[#8b93a3] hover:bg-[#20232b] hover:text-[#d7dae0]"
+            onClick={() => addLayer()}
+            title="Add layer"
           >
-            {anyExpanded ? 'Collapse all' : 'Expand all'}
+            +
           </button>
-        )}
+        </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
@@ -466,57 +501,172 @@ export function MeasurementsPanel() {
             Draw a measurement with a tool from the left rail — it will show up here grouped by layer.
           </div>
         )}
-        {summary.layers.map(
-          (ls) =>
-            ls.results.length > 0 && (
-              <div key={ls.layer.id} className="mb-3">
-                <button
-                  onClick={() => toggleLayerCollapsed(ls.layer.id)}
-                  className="mb-1 flex w-full items-center gap-1.5 rounded px-0.5 py-0.5 text-left hover:bg-[#1c1f27]"
-                  title={ls.layer.collapsed ? 'Expand layer' : 'Collapse layer'}
-                >
-                  <svg
-                    width="10"
-                    height="10"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    className={`shrink-0 text-[#6d7686] transition-transform ${ls.layer.collapsed ? '-rotate-90' : ''}`}
+        {summary.layers.map((ls) => {
+          const layer = ls.layer
+          const hasResults = ls.results.length > 0
+          return (
+            <div key={layer.id} className="relative mb-2">
+              <div
+                onClick={() => setActiveLayer(layer.id)}
+                className={`group flex items-center gap-1.5 rounded px-1.5 py-1 ${
+                  layer.id === project.activeLayerId ? 'bg-[#20232b]' : 'hover:bg-[#1c1f27]'
+                }`}
+              >
+                {hasResults ? (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      toggleLayerCollapsed(layer.id)
+                    }}
+                    title={layer.collapsed ? 'Expand layer' : 'Collapse layer'}
+                    className="shrink-0 text-[#6d7686] hover:text-[#c7cbd4]"
                   >
-                    <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: ls.layer.color }} />
-                  <span className="text-[11px] font-medium text-[#c7cbd4]">{ls.layer.name}</span>
-                  {!!ls.layer.wastePercent && (
-                    <span className="rounded bg-[#20232b] px-1 text-[9px] text-[#8b93a3]">+{ls.layer.wastePercent}% waste</span>
-                  )}
-                  <span className="flex-1" />
-                  <span className="text-[10px] text-[#6d7686]">
+                    <svg
+                      width="10"
+                      height="10"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      className={`transition-transform ${layer.collapsed ? '-rotate-90' : ''}`}
+                    >
+                      <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                ) : (
+                  <span className="w-[10px] shrink-0" />
+                )}
+                <button
+                  className="h-3 w-3 shrink-0 rounded-full ring-1 ring-black/30"
+                  style={{ backgroundColor: layer.color }}
+                  title="Change colour"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setLayerColorPickerId(layerColorPickerId === layer.id ? null : layer.id)
+                  }}
+                />
+                {editingLayerId === layer.id ? (
+                  <input
+                    autoFocus
+                    className="min-w-0 flex-1 rounded bg-[#14161b] px-1 text-xs text-[#e4e7ec] outline-none ring-1 ring-[#5b8def]"
+                    value={layerNameDraft}
+                    onChange={(e) => setLayerNameDraft(e.target.value)}
+                    onClick={(e) => e.stopPropagation()}
+                    onBlur={() => {
+                      if (layerNameDraft.trim()) renameLayer(layer.id, layerNameDraft.trim())
+                      setEditingLayerId(null)
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') e.currentTarget.blur()
+                      if (e.key === 'Escape') setEditingLayerId(null)
+                    }}
+                  />
+                ) : (
+                  <span
+                    className="min-w-0 flex-1 truncate text-[11px] font-medium text-[#c7cbd4]"
+                    onDoubleClick={(e) => {
+                      e.stopPropagation()
+                      setLayerNameDraft(layer.name)
+                      setEditingLayerId(layer.id)
+                    }}
+                    title={layer.name}
+                  >
+                    {layer.name}
+                  </span>
+                )}
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  title="Waste % applied to this layer's quantities"
+                  defaultValue={layer.wastePercent ?? ''}
+                  placeholder="0%"
+                  onClick={(e) => e.stopPropagation()}
+                  onBlur={(e) => {
+                    const v = Number.parseFloat(e.target.value)
+                    setLayerWastePercent(layer.id, Number.isFinite(v) && v > 0 ? v : undefined)
+                  }}
+                  className="w-9 shrink-0 rounded bg-[#14161b] px-1 py-0.5 text-center text-[10px] text-[#8b93a3] outline-none ring-1 ring-[#2a2d35] focus:ring-[#5b8def]"
+                />
+                <button
+                  title={layer.visible ? 'Hide layer' : 'Show layer'}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    toggleLayerVisible(layer.id)
+                  }}
+                  className="shrink-0 text-[#8b93a3] hover:text-[#d7dae0]"
+                >
+                  <EyeIcon visible={layer.visible} />
+                </button>
+                <button
+                  title={layer.locked ? 'Unlock layer' : 'Lock layer'}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    toggleLayerLocked(layer.id)
+                  }}
+                  className="shrink-0 text-[#8b93a3] hover:text-[#d7dae0]"
+                >
+                  <LockIcon locked={layer.locked} />
+                </button>
+                <button
+                  title="Delete layer"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    if (confirm(`Delete layer "${layer.name}" and its measurements?`)) removeLayer(layer.id)
+                  }}
+                  className="hidden shrink-0 text-[#8b93a3] hover:text-[#c0392b] group-hover:inline"
+                >
+                  ×
+                </button>
+              </div>
+
+              {layerColorPickerId === layer.id && (
+                <div
+                  className="relative z-10 ml-5 mt-1 flex flex-wrap gap-1 rounded border border-[#2a2d35] bg-[#1c1f27] p-1.5 shadow-lg"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {LAYER_PALETTE.map((c) => (
+                    <button
+                      key={c}
+                      className="h-4 w-4 rounded-full ring-1 ring-black/30"
+                      style={{ backgroundColor: c }}
+                      onClick={() => {
+                        setLayerColor(layer.id, c)
+                        setLayerColorPickerId(null)
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
+
+              {hasResults && (
+                <>
+                  <div className="px-1 text-right text-[10px] text-[#6d7686]">
                     {ls.totals.areaM2 > 0 && `${fmt(ls.totals.areaM2)} m² `}
                     {ls.totals.lengthM > 0 && `${fmt(ls.totals.lengthM)} m `}
                     {ls.totals.volumeM3 > 0 && `${fmt(ls.totals.volumeM3)} m³ `}
                     {ls.totals.count > 0 && `${ls.totals.count} no.`}
-                  </span>
-                </button>
-                {(ls.totals.areaM2WithWaste > ls.totals.areaM2 ||
-                  ls.totals.lengthMWithWaste > ls.totals.lengthM ||
-                  ls.totals.countWithWaste > ls.totals.count) && (
-                  <div className="mb-1 px-0.5 text-right text-[9px] text-[#6d7686]">
-                    incl. waste:{' '}
-                    {ls.totals.areaM2WithWaste > ls.totals.areaM2 && `${fmt(ls.totals.areaM2WithWaste)} m² `}
-                    {ls.totals.lengthMWithWaste > ls.totals.lengthM && `${fmt(ls.totals.lengthMWithWaste)} m `}
-                    {ls.totals.countWithWaste > ls.totals.count && `${ls.totals.countWithWaste} no.`}
                   </div>
-                )}
-                {!ls.layer.collapsed && (
-                  <div className="flex flex-col gap-0.5">
-                    {ls.results.map((r) => (
-                      <ResultRow key={r.measurement.id} result={r} />
-                    ))}
-                  </div>
-                )}
-              </div>
-            ),
-        )}
+                  {(ls.totals.areaM2WithWaste > ls.totals.areaM2 ||
+                    ls.totals.lengthMWithWaste > ls.totals.lengthM ||
+                    ls.totals.countWithWaste > ls.totals.count) && (
+                    <div className="px-1 text-right text-[9px] text-[#6d7686]">
+                      incl. waste:{' '}
+                      {ls.totals.areaM2WithWaste > ls.totals.areaM2 && `${fmt(ls.totals.areaM2WithWaste)} m² `}
+                      {ls.totals.lengthMWithWaste > ls.totals.lengthM && `${fmt(ls.totals.lengthMWithWaste)} m `}
+                      {ls.totals.countWithWaste > ls.totals.count && `${ls.totals.countWithWaste} no.`}
+                    </div>
+                  )}
+                  {!layer.collapsed && (
+                    <div className="mt-1 flex flex-col gap-0.5">
+                      {ls.results.map((r) => (
+                        <ResultRow key={r.measurement.id} result={r} />
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )
+        })}
 
         {itemSummary.length > 0 && (
           <div className="mb-3 border-t border-[#2a2d35] pt-2">
