@@ -28,9 +28,20 @@ function blobToDataUrl(blob: Blob): Promise<string> {
   })
 }
 
-async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
-  const res = await fetch(dataUrl)
-  return res.blob()
+// Deliberately not fetch(dataUrl): a sandboxed iframe host (Claude's
+// artifact viewer, confirmed) blocks fetch() of data: URLs under its CSP —
+// "Failed to fetch" — even though data: URLs work fine everywhere else
+// (img src, canvas, Blob). atob()/Uint8Array are plain JS, no network
+// involved, so this works identically in every host.
+function dataUrlToBlob(dataUrl: string): Blob {
+  const commaIndex = dataUrl.indexOf(',')
+  const header = dataUrl.slice(0, commaIndex)
+  const mimeMatch = header.match(/data:([^;]+)/)
+  const mime = mimeMatch ? mimeMatch[1] : 'application/octet-stream'
+  const binary = atob(dataUrl.slice(commaIndex + 1))
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+  return new Blob([bytes], { type: mime })
 }
 
 function slugify(name: string): string {
@@ -78,8 +89,7 @@ export async function importProjectJson(file: File): Promise<Project> {
       const { imageData, ...rest } = exported
       const imageBlobKey = makeId()
       if (imageData) {
-        const blob = await dataUrlToBlob(imageData)
-        await putBlob(imageBlobKey, blob)
+        await putBlob(imageBlobKey, dataUrlToBlob(imageData))
       }
       return { ...rest, imageBlobKey }
     }),
