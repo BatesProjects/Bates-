@@ -8,6 +8,8 @@ export function ThumbnailSidebar() {
   const addSheet = useProjectStore((s) => s.addSheet)
   const removeSheet = useProjectStore((s) => s.removeSheet)
   const setActiveSheet = useProjectStore((s) => s.setActiveSheet)
+  const requestConfirm = useProjectStore((s) => s.requestConfirm)
+  const showToast = useProjectStore((s) => s.showToast)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
   const [dragOver, setDragOver] = useState(false)
@@ -27,7 +29,8 @@ export function ThumbnailSidebar() {
       }
     } catch (err) {
       console.error(err)
-      alert('Failed to process one or more files. See console for details.')
+      const detail = err instanceof Error ? err.message : String(err)
+      showToast(`Failed to process one or more files: ${detail}`)
     } finally {
       setUploading(false)
     }
@@ -84,8 +87,8 @@ export function ThumbnailSidebar() {
               sheet={sheet}
               active={sheet.id === project.activeSheetId}
               onClick={() => setActiveSheet(sheet.id)}
-              onDelete={() => {
-                if (confirm(`Remove "${sheet.name}" and its measurements?`)) removeSheet(sheet.id)
+              onDelete={async () => {
+                if (await requestConfirm(`Remove "${sheet.name}" and its measurements?`)) removeSheet(sheet.id)
               }}
             />
           ))}

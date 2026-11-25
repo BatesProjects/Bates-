@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { Dashboard } from './components/Dashboard'
+import { GlobalDialogs } from './components/GlobalDialogs'
 import { TakeoffScreen } from './components/TakeoffScreen'
 import { listItemPresets } from './lib/db'
 import { initAutosave, initItemPresetsAutosave } from './store/persist'
@@ -31,6 +32,10 @@ export default function App() {
     function onKeyDown(e: KeyboardEvent) {
       if (isTyping(e)) return
       const store = useProjectStore.getState()
+      if (e.key === 'Escape' && store.confirmRequest) {
+        store.resolveConfirm(false)
+        return
+      }
       if (store.screen !== 'takeoff') return
 
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
@@ -112,9 +117,10 @@ export default function App() {
     }
   }, [])
 
-  if (screen === 'takeoff' && project) {
-    return <TakeoffScreen project={project} />
-  }
-
-  return <Dashboard />
+  return (
+    <>
+      {screen === 'takeoff' && project ? <TakeoffScreen project={project} /> : <Dashboard />}
+      <GlobalDialogs />
+    </>
+  )
 }

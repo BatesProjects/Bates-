@@ -8,6 +8,7 @@ export function TopBar() {
   const renameProject = useProjectStore((s) => s.renameProject)
   const goToDashboard = useProjectStore((s) => s.goToDashboard)
   const itemPresets = useProjectStore((s) => s.itemPresets)
+  const showToast = useProjectStore((s) => s.showToast)
   const [editingName, setEditingName] = useState(false)
   const [nameDraft, setNameDraft] = useState('')
 
@@ -77,7 +78,8 @@ export function TopBar() {
         onClick={() => {
           exportProjectJson(project).catch((err) => {
             console.error(err)
-            alert('Failed to export project JSON.')
+            const detail = err instanceof Error ? err.message : String(err)
+            showToast(`Failed to export project JSON: ${detail}`)
           })
         }}
       >

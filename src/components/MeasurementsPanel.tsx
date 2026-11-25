@@ -458,6 +458,7 @@ export function MeasurementsPanel() {
   const toggleLayerLocked = useProjectStore((s) => s.toggleLayerLocked)
   const setLayerWastePercent = useProjectStore((s) => s.setLayerWastePercent)
   const removeLayer = useProjectStore((s) => s.removeLayer)
+  const requestConfirm = useProjectStore((s) => s.requestConfirm)
   const setActiveLayer = useProjectStore((s) => s.setActiveLayer)
   const [editingLayerId, setEditingLayerId] = useState<string | null>(null)
   const [layerNameDraft, setLayerNameDraft] = useState('')
@@ -608,9 +609,9 @@ export function MeasurementsPanel() {
                 </button>
                 <button
                   title="Delete layer"
-                  onClick={(e) => {
+                  onClick={async (e) => {
                     e.stopPropagation()
-                    if (confirm(`Delete layer "${layer.name}" and its measurements?`)) removeLayer(layer.id)
+                    if (await requestConfirm(`Delete layer "${layer.name}" and its measurements?`)) removeLayer(layer.id)
                   }}
                   className="hidden shrink-0 text-[#8b93a3] hover:text-[#c0392b] group-hover:inline"
                 >
@@ -722,15 +723,12 @@ export function MeasurementsPanel() {
                       </button>
                       <button
                         title="Delete this item and all its markers"
-                        onClick={(e) => {
+                        onClick={async (e) => {
                           e.stopPropagation()
-                          if (
-                            confirm(
-                              `Delete "${row.preset.name}" and remove all ${row.count} of its marker(s) from this project? This can't be undone from here.`,
-                            )
-                          ) {
-                            deleteItemPresetAndMarkers(row.preset.id)
-                          }
+                          const ok = await requestConfirm(
+                            `Delete "${row.preset.name}" and remove all ${row.count} of its marker(s) from this project? This can't be undone from here.`,
+                          )
+                          if (ok) deleteItemPresetAndMarkers(row.preset.id)
                         }}
                         className={`shrink-0 text-[#8b93a3] hover:text-[#c0392b] ${row.orphaned ? '' : 'hidden group-hover:inline'}`}
                       >

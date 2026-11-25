@@ -135,6 +135,19 @@ interface ProjectStoreState {
   focusOnPoint: (sheetId: string, point: Point) => void
   clearPendingFocusPoint: () => void
 
+  // --- in-app replacements for window.confirm/alert --------------------
+  // Claude's artifact viewer (and any other sandboxed iframe host) makes
+  // window.confirm()/alert() silent no-ops — confirm() returns false and
+  // alert() does nothing — so every delete/error path that relied on them
+  // looked like it did nothing at all. These render an actual dialog/toast
+  // instead, via GlobalDialogs, and work identically in a normal browser tab.
+  confirmRequest: { message: string; confirmLabel: string; resolve: (ok: boolean) => void } | null
+  requestConfirm: (message: string, confirmLabel?: string) => Promise<boolean>
+  resolveConfirm: (ok: boolean) => void
+  toast: { message: string; id: number } | null
+  showToast: (message: string) => void
+  dismissToast: () => void
+
   // --- history ------------------------------------------------------
   undo: () => void
   redo: () => void
@@ -624,6 +637,19 @@ export const useProjectStore = create<ProjectStoreState>((set, get) => ({
   pendingFocusPoint: null,
   focusOnPoint: (sheetId, point) => set({ pendingFocusPoint: { sheetId, point } }),
   clearPendingFocusPoint: () => set({ pendingFocusPoint: null }),
+
+  confirmRequest: null,
+  requestConfirm: (message, confirmLabel = 'Delete') =>
+    new Promise<boolean>((resolve) => {
+      set({ confirmRequest: { message, confirmLabel, resolve } })
+    }),
+  resolveConfirm: (ok) => {
+    get().confirmRequest?.resolve(ok)
+    set({ confirmRequest: null })
+  },
+  toast: null,
+  showToast: (message) => set({ toast: { message, id: Date.now() } }),
+  dismissToast: () => set({ toast: null }),
 
   undo: () =>
     set((s) => {

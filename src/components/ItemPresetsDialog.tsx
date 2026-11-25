@@ -10,6 +10,7 @@ function shapeLabel(shape: ItemPreset['markerShape']): string {
 function PresetRow({ preset }: { preset: ItemPreset }) {
   const updateItemPreset = useProjectStore((s) => s.updateItemPreset)
   const deleteItemPresetAndMarkers = useProjectStore((s) => s.deleteItemPresetAndMarkers)
+  const requestConfirm = useProjectStore((s) => s.requestConfirm)
   const project = useProjectStore((s) => s.project)
   const [colorPickerOpen, setColorPickerOpen] = useState(false)
 
@@ -49,13 +50,14 @@ function PresetRow({ preset }: { preset: ItemPreset }) {
         </select>
         <button
           title="Delete item preset and all its markers"
-          onClick={() =>
-            confirm(
+          onClick={async () => {
+            const ok = await requestConfirm(
               markerCount > 0
                 ? `Delete "${preset.name}" and remove all ${markerCount} of its marker(s) from this project? This can't be undone from here.`
                 : `Delete item preset "${preset.name}"?`,
-            ) && deleteItemPresetAndMarkers(preset.id)
-          }
+            )
+            if (ok) deleteItemPresetAndMarkers(preset.id)
+          }}
           className="shrink-0 text-[#8b93a3] hover:text-[#c0392b]"
         >
           ×

@@ -13,6 +13,8 @@ function sortByRecent(projects: Project[]): Project[] {
 export function Dashboard() {
   const loadProject = useProjectStore((s) => s.loadProject)
   const newProject = useProjectStore((s) => s.newProject)
+  const requestConfirm = useProjectStore((s) => s.requestConfirm)
+  const showToast = useProjectStore((s) => s.showToast)
   const [projects, setProjects] = useState<Project[] | null>(null)
   const [loadError, setLoadError] = useState(false)
   const [slowLoad, setSlowLoad] = useState(false)
@@ -50,7 +52,7 @@ export function Dashboard() {
   }
 
   async function handleDelete(project: Project) {
-    if (!confirm(`Delete "${project.name}"? This removes its sheets and measurements permanently.`)) return
+    if (!(await requestConfirm(`Delete "${project.name}"? This removes its sheets and measurements permanently.`))) return
     await deleteProjectAndBlobs(project.id)
     setProjects((prev) => (prev ? prev.filter((p) => p.id !== project.id) : prev))
   }
@@ -64,7 +66,8 @@ export function Dashboard() {
       loadProject(imported)
     } catch (err) {
       console.error(err)
-      alert('Could not import that project file.')
+      const detail = err instanceof Error ? err.message : String(err)
+      showToast(`Could not import that project file: ${detail}`)
     }
   }
 
