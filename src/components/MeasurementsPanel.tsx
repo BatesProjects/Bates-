@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { measurementCentroid } from '../lib/measure'
 import { LAYER_PALETTE } from '../lib/project'
+import { formatScaleRatio } from '../lib/scales'
 import { buildItemSummary, buildSummary, type ItemSummaryRow } from '../lib/summary'
-import type { AreaMeasurement, CountMeasurement, Measurement, MeasurementResult, WallMeasurement, WallOpening } from '../lib/types'
+import type { AreaMeasurement, CountMeasurement, Measurement, MeasurementResult, Viewport, WallMeasurement, WallOpening } from '../lib/types'
 import { makeId } from '../lib/id'
 import { useProjectStore } from '../store/useProjectStore'
 
@@ -237,6 +238,8 @@ function ResultRow({ result }: { result: MeasurementResult }) {
     valueText = `r=${fmt(result.lengthM)}m · ${fmt(result.areaM2)} m²`
   } else if (m.type === 'wall') {
     valueText = `${fmt(result.areaM2)} m² net`
+  } else if (m.type === 'room') {
+    valueText = `${fmt(result.areaM2)} m² floor`
   }
 
   return (
@@ -355,6 +358,28 @@ function ResultRow({ result }: { result: MeasurementResult }) {
         </>
       )}
 
+      {selected && m.type === 'room' && (
+        <>
+          <label className="mt-1 flex items-center gap-1 text-[10px] text-[#8b93a3]" onClick={(e) => e.stopPropagation()}>
+            Ceiling height (m):
+            <NumberField
+              value={m.heightM}
+              onCommit={(v) => updateMeasurement(m.id, { heightM: v ?? 2.4 } as Partial<Measurement>)}
+            />
+          </label>
+          <div className="mt-0.5 text-[10px] text-[#8b93a3]">
+            Floor: <span className="text-[#c7cbd4]">{fmt(result.areaM2)} m²</span> · Ceiling:{' '}
+            <span className="text-[#c7cbd4]">{fmt(result.ceilingAreaM2)} m²</span>
+          </div>
+          <div className="mt-0.5 text-[10px] text-[#8b93a3]">
+            Perimeter: <span className="text-[#c7cbd4]">{fmt(result.perimeterM)} m</span> · Wall area:{' '}
+            <span className="text-[#c7cbd4]">{fmt(result.grossAreaM2)} m²</span>
+          </div>
+          <WasteSummaryLine result={result} unit="m²" />
+          <WasteOverrideField measurement={m} />
+        </>
+      )}
+
       {selected && m.type === 'count' && (
         <>
           {(() => {
@@ -443,6 +468,86 @@ function LockIcon({ locked }: { locked: boolean }) {
   )
 }
 
+function ViewportRow({ sheetId, viewport }: { sheetId: string; viewport: Viewport }) {
+  const selectedViewportId = useProjectStore((s) => s.selectedViewportId)
+  const selectViewport = useProjectStore((s) => s.selectViewport)
+  const renameViewport = useProjectStore((s) => s.renameViewport)
+  const removeViewport = useProjectStore((s) => s.removeViewport)
+  const startViewportCalibration = useProjectStore((s) => s.startViewportCalibration)
+  const requestConfirm = useProjectStore((s) => s.requestConfirm)
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
+
+  const selected = selectedViewportId === viewport.id
+  const scaleLabel = viewport.calibration?.scaleRatio
+    ? formatScaleRatio(viewport.calibration.scaleRatio)
+    : viewport.calibration
+      ? 'calibrated'
+      : 'uncalibrated'
+
+  return (
+    <div
+      onClick={() => selectViewport(viewport.id)}
+      className={`group cursor-pointer rounded px-1.5 py-1 text-xs ${
+        selected ? 'bg-[#243040] ring-1 ring-[#2dd4bf]' : 'hover:bg-[#1c1f27]'
+      }`}
+    >
+      <div className="flex items-center gap-1.5">
+        {editing ? (
+          <input
+            autoFocus
+            className="min-w-0 flex-1 rounded bg-[#14161b] px-1 text-[#e4e7ec] outline-none ring-1 ring-[#2dd4bf]"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onClick={(e) => e.stopPropagation()}
+            onBlur={() => {
+              if (draft.trim()) renameViewport(sheetId, viewport.id, draft.trim())
+              setEditing(false)
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') e.currentTarget.blur()
+              if (e.key === 'Escape') setEditing(false)
+            }}
+          />
+        ) : (
+          <span
+            className="min-w-0 flex-1 truncate text-[#c7cbd4]"
+            onDoubleClick={(e) => {
+              e.stopPropagation()
+              setDraft(viewport.name)
+              setEditing(true)
+            }}
+          >
+            {viewport.name}
+          </span>
+        )}
+        <span className={`shrink-0 text-[10px] ${viewport.calibration ? 'text-[#2dd4bf]' : 'text-[#e8a53d]'}`}>{scaleLabel}</span>
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            startViewportCalibration(viewport.id)
+          }}
+          className="hidden shrink-0 rounded border border-[#333742] px-1.5 py-0.5 text-[10px] text-[#c7cbd4] hover:border-[#2dd4bf] group-hover:inline"
+        >
+          Calibrate
+        </button>
+        <button
+          onClick={async (e) => {
+            e.stopPropagation()
+            if (await requestConfirm(`Delete viewport "${viewport.name}"? Measurements inside it will fall back to the sheet's own scale.`)) {
+              removeViewport(sheetId, viewport.id)
+            }
+          }}
+          className="hidden shrink-0 text-[#8b93a3] hover:text-[#c0392b] group-hover:inline"
+          title="Delete"
+        >
+          ×
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export function MeasurementsPanel() {
   const project = useProjectStore((s) => s.project)
   const toggleLayerCollapsed = useProjectStore((s) => s.toggleLayerCollapsed)
@@ -470,6 +575,8 @@ export function MeasurementsPanel() {
   const gt = summary.grandTotals
   const nonEmptyLayers = summary.layers.filter((ls) => ls.results.length > 0)
   const anyExpanded = nonEmptyLayers.some((ls) => !ls.layer.collapsed)
+  const activeSheet = project.sheets.find((s) => s.id === project.activeSheetId)
+  const viewports = activeSheet?.viewports ?? []
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -668,6 +775,17 @@ export function MeasurementsPanel() {
             </div>
           )
         })}
+
+        {viewports.length > 0 && activeSheet && (
+          <div className="mb-3 border-t border-[#2a2d35] pt-2">
+            <div className="mb-1 px-0.5 text-[11px] font-medium text-[#6d7686]">Viewports</div>
+            <div className="flex flex-col gap-0.5">
+              {viewports.map((vp) => (
+                <ViewportRow key={vp.id} sheetId={activeSheet.id} viewport={vp} />
+              ))}
+            </div>
+          </div>
+        )}
 
         {itemSummary.length > 0 && (
           <div className="mb-3 border-t border-[#2a2d35] pt-2">

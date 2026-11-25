@@ -14,8 +14,68 @@ function effectiveWastePercent(measurement: Measurement, layer: Layer | undefine
   return measurement.wasteOverridePercent ?? layer?.wastePercent ?? 0
 }
 
+/**
+ * A measurement drawn inside a viewport's bounds uses that viewport's own
+ * calibration instead of the sheet's, so a detail callout plotted at a
+ * different scale still measures correctly. Resolved by geometric
+ * containment (centroid-in-rect) rather than tagging measurements with a
+ * viewportId, so moving/resizing a viewport later re-scopes what's inside it.
+ */
+function resolveCalibration(sheet: Sheet | undefined, measurement: Measurement) {
+  const viewports = sheet?.viewports
+  if (viewports && viewports.length > 0) {
+    const centroid = measurementCentroid(measurement)
+    for (const vp of viewports) {
+      const { x, y, width, height } = vp.bounds
+      if (centroid.x >= x && centroid.x <= x + width && centroid.y >= y && centroid.y <= y + height) {
+        return vp.calibration
+      }
+    }
+  }
+  return sheet?.calibration ?? null
+}
+
+export function measurementCentroid(measurement: Measurement): { x: number; y: number } {
+  switch (measurement.type) {
+    case 'area':
+    case 'length':
+    case 'wall':
+    case 'room':
+    case 'count': {
+      const pts = measurement.points
+      const sum = pts.reduce((acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }), { x: 0, y: 0 })
+      return { x: sum.x / pts.length, y: sum.y / pts.length }
+    }
+    case 'radius':
+      return measurement.center
+    default:
+      return { x: 0, y: 0 }
+  }
+}
+
+export function measurementBoundsDiagonal(measurement: Measurement): number {
+  switch (measurement.type) {
+    case 'area':
+    case 'length':
+    case 'wall':
+    case 'room': {
+      const pts = measurement.points
+      if (pts.length < 2) return 0
+      const xs = pts.map((p) => p.x)
+      const ys = pts.map((p) => p.y)
+      return distance(
+        { x: Math.min(...xs), y: Math.min(...ys) },
+        { x: Math.max(...xs), y: Math.max(...ys) },
+      )
+    }
+    default:
+      return 0
+  }
+}
+
 export function computeResult(measurement: Measurement, sheet: Sheet | undefined, layer?: Layer): MeasurementResult {
-  const ppm = sheet?.calibration?.pixelsPerMetre ?? 0
+  const calibration = resolveCalibration(sheet, measurement)
+  const ppm = calibration?.pixelsPerMetre ?? 0
   const uncalibrated = !ppm
   const waste = effectiveWastePercent(measurement, layer)
   const wastePercent = waste > 0 ? waste : undefined
@@ -94,47 +154,24 @@ export function computeResult(measurement: Measurement, sheet: Sheet | undefined
         areaM2WithWaste: wastePercent ? areaM2 * (1 + wastePercent / 100) : undefined,
       }
     }
+    case 'room': {
+      const floorAreaM2 = px2ToM2(polygonAreaPx2(measurement.points), ppm)
+      const perimeterM = pxToM(polygonPerimeterPx(measurement.points), ppm)
+      const wallAreaM2 = perimeterM * measurement.heightM
+      return {
+        measurement,
+        uncalibrated,
+        areaM2: floorAreaM2,
+        ceilingAreaM2: floorAreaM2,
+        perimeterM,
+        lengthM: perimeterM,
+        grossAreaM2: wallAreaM2,
+        wastePercent,
+        areaM2WithWaste: wastePercent ? floorAreaM2 * (1 + wastePercent / 100) : undefined,
+        lengthMWithWaste: wastePercent ? perimeterM * (1 + wastePercent / 100) : undefined,
+      }
+    }
     default:
       return { measurement, uncalibrated }
-  }
-}
-
-export function measurementCentroid(measurement: Measurement): { x: number; y: number } {
-  switch (measurement.type) {
-    case 'area':
-    case 'length':
-    case 'wall': {
-      const pts = measurement.points
-      const sum = pts.reduce((acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }), { x: 0, y: 0 })
-      return { x: sum.x / pts.length, y: sum.y / pts.length }
-    }
-    case 'count': {
-      const pts = measurement.points
-      const sum = pts.reduce((acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }), { x: 0, y: 0 })
-      return { x: sum.x / pts.length, y: sum.y / pts.length }
-    }
-    case 'radius':
-      return measurement.center
-    default:
-      return { x: 0, y: 0 }
-  }
-}
-
-export function measurementBoundsDiagonal(measurement: Measurement): number {
-  switch (measurement.type) {
-    case 'area':
-    case 'length':
-    case 'wall': {
-      const pts = measurement.points
-      if (pts.length < 2) return 0
-      const xs = pts.map((p) => p.x)
-      const ys = pts.map((p) => p.y)
-      return distance(
-        { x: Math.min(...xs), y: Math.min(...ys) },
-        { x: Math.max(...xs), y: Math.max(...ys) },
-      )
-    }
-    default:
-      return 0
   }
 }

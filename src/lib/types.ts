@@ -21,6 +21,20 @@ export interface Calibration {
   scaleRatio?: number
 }
 
+/**
+ * A sub-region of a sheet drawn at its own scale — e.g. a detail callout
+ * plotted at 1:20 on a sheet whose main plan is 1:100. Its bounds are in the
+ * same sheet-native pixel coordinates as everything else; only the
+ * calibration used for measurements inside it differs from the sheet's own.
+ */
+export interface Viewport {
+  id: string
+  name: string
+  /** Rectangle in sheet-native pixel coordinates. */
+  bounds: { x: number; y: number; width: number; height: number }
+  calibration: Calibration | null
+}
+
 export interface Sheet {
   id: string
   projectId: string
@@ -42,6 +56,8 @@ export interface Sheet {
    * real-world print scale we have no reliable way to know.
    */
   sourceDpi?: number
+  /** Independently-scaled regions on this sheet (detail callouts, etc.). */
+  viewports?: Viewport[]
 }
 
 export interface Layer {
@@ -58,7 +74,7 @@ export interface Layer {
   wastePercent?: number
 }
 
-export type MeasurementType = 'area' | 'length' | 'count' | 'radius' | 'wall'
+export type MeasurementType = 'area' | 'length' | 'count' | 'radius' | 'wall' | 'room'
 
 interface MeasurementBase {
   id: string
@@ -152,12 +168,22 @@ export interface WallMeasurement extends MeasurementBase {
   openings: WallOpening[]
 }
 
+/** A room: its floor outline in plan, plus a ceiling height, from which floor/ceiling/perimeter/wall quantities are all derived. */
+export interface RoomMeasurement extends MeasurementBase {
+  type: 'room'
+  /** Polygon vertices in sheet-native pixel coordinates — the room's floor outline. */
+  points: Point[]
+  /** Ceiling height in metres, used to derive the room's wall area (perimeter × height). */
+  heightM: number
+}
+
 export type Measurement =
   | AreaMeasurement
   | LengthMeasurement
   | CountMeasurement
   | RadiusMeasurement
   | WallMeasurement
+  | RoomMeasurement
 
 export interface Project {
   id: string
@@ -192,10 +218,12 @@ export interface MeasurementResult {
   planAreaM2?: number
   /** Total area removed by cut-outs (area type). */
   cutoutAreaM2?: number
-  /** Wall run x height, before openings are subtracted (wall type). */
+  /** Wall run x height, before openings are subtracted (wall type); a room's wall area, perimeter × height (room type). */
   grossAreaM2?: number
   /** Total door/window opening area subtracted from a wall's gross area (wall type). */
   openingsAreaM2?: number
+  /** Ceiling area — same as the floor area for a flat ceiling (room type). */
+  ceilingAreaM2?: number
   /** The effective waste % applied (measurement override, else the layer's), when > 0. */
   wastePercent?: number
   /** areaM2 inflated by wastePercent, when a waste % applies. */

@@ -7,6 +7,7 @@ export function ThumbnailSidebar() {
   const project = useProjectStore((s) => s.project)
   const addSheet = useProjectStore((s) => s.addSheet)
   const removeSheet = useProjectStore((s) => s.removeSheet)
+  const renameSheet = useProjectStore((s) => s.renameSheet)
   const setActiveSheet = useProjectStore((s) => s.setActiveSheet)
   const requestConfirm = useProjectStore((s) => s.requestConfirm)
   const showToast = useProjectStore((s) => s.showToast)
@@ -90,6 +91,7 @@ export function ThumbnailSidebar() {
               onDelete={async () => {
                 if (await requestConfirm(`Remove "${sheet.name}" and its measurements?`)) removeSheet(sheet.id)
               }}
+              onRename={(name) => renameSheet(sheet.id, name)}
             />
           ))}
         </div>

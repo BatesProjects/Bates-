@@ -6,6 +6,10 @@ import { listItemPresets } from './lib/db'
 import { initAutosave, initItemPresetsAutosave } from './store/persist'
 import { useProjectStore } from './store/useProjectStore'
 
+if (import.meta.env.DEV) {
+  ;(window as unknown as { __store: typeof useProjectStore }).__store = useProjectStore
+}
+
 export default function App() {
   const screen = useProjectStore((s) => s.screen)
   const project = useProjectStore((s) => s.project)
@@ -90,6 +94,10 @@ export default function App() {
         case 'W':
           store.setActiveTool('wall')
           break
+        case 'm':
+        case 'M':
+          store.setActiveTool('room')
+          break
         case 'c':
         case 'C':
           store.setActiveTool('count')
@@ -97,6 +105,10 @@ export default function App() {
         case 'r':
         case 'R':
           store.setActiveTool('radius')
+          break
+        case 'p':
+        case 'P':
+          store.setActiveTool('viewport')
           break
         case 'k':
         case 'K':

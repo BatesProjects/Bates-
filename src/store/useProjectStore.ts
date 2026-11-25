@@ -12,9 +12,21 @@ import type {
   Point,
   Project,
   Sheet,
+  Viewport,
 } from '../lib/types'
 
-export type ToolId = 'select' | 'pan' | 'calibrate' | 'verify' | 'area' | 'length' | 'count' | 'radius' | 'wall'
+export type ToolId =
+  | 'select'
+  | 'pan'
+  | 'calibrate'
+  | 'verify'
+  | 'area'
+  | 'length'
+  | 'count'
+  | 'radius'
+  | 'wall'
+  | 'room'
+  | 'viewport'
 export type Screen = 'dashboard' | 'takeoff'
 
 const MAX_HISTORY = 200
@@ -39,15 +51,22 @@ interface ProjectStoreState {
 
   activeTool: ToolId
   selectedMeasurementId: string | null
+  /** The viewport currently shown/edited in the sidebar, mutually exclusive with selectedMeasurementId. */
+  selectedViewportId: string | null
+  selectViewport: (id: string | null) => void
   draft: DraftState
   /** Per-sheet zoom/pan. Ephemeral UI state, not persisted in the project file. */
   views: Record<string, ViewTransform>
-  /** Set while the calibration dialog is open, holding the two clicked points. */
-  pendingCalibration: { sheetId: string; pointA: Point; pointB: Point } | null
+  /** Set while the calibration dialog is open, holding the two clicked points. When viewportId is set, the resulting calibration is written to that viewport instead of the sheet. */
+  pendingCalibration: { sheetId: string; pointA: Point; pointB: Point; viewportId?: string } | null
   /** True when the calibration tool should show its "pick a method" chooser rather than wait for two clicks. */
   calibrationChooserOpen: boolean
-  openCalibrationChooser: () => void
+  /** Set when the chooser/dialog was opened to calibrate a specific viewport rather than the sheet itself. */
+  calibratingViewportId: string | null
+  openCalibrationChooser: (viewportId?: string) => void
   closeCalibrationChooser: () => void
+  /** Switches to the calibrate tool targeting one viewport instead of the sheet, in one atomic step (setActiveTool alone would reset calibratingViewportId). */
+  startViewportCalibration: (viewportId: string) => void
   /** Set after two clicks with the Verify Scale tool, holding the points to check against the known distance the user enters. */
   pendingVerify: { sheetId: string; pointA: Point; pointB: Point } | null
   startVerifyPoints: (sheetId: string, pointA: Point, pointB: Point) => void
@@ -85,9 +104,16 @@ interface ProjectStoreState {
   // --- sheets -------------------------------------------------------------
   addSheet: (sheet: Sheet) => void
   removeSheet: (sheetId: string) => void
+  renameSheet: (sheetId: string, name: string) => void
   setActiveSheet: (sheetId: string) => void
   reorderSheets: (orderedIds: string[]) => void
   setCalibration: (sheetId: string, calibration: Calibration) => void
+
+  // --- viewports (independently-scaled regions on a sheet) ---------------
+  addViewport: (sheetId: string, pointA: Point, pointB: Point) => void
+  renameViewport: (sheetId: string, viewportId: string, name: string) => void
+  removeViewport: (sheetId: string, viewportId: string) => void
+  setViewportCalibration: (sheetId: string, viewportId: string, calibration: Calibration) => void
 
   // --- layers ---------------------------------------------------------
   addLayer: (name?: string) => string
@@ -124,7 +150,7 @@ interface ProjectStoreState {
   cancelDraft: () => void
   commitDraft: () => void
 
-  startCalibrationPoints: (sheetId: string, pointA: Point, pointB: Point) => void
+  startCalibrationPoints: (sheetId: string, pointA: Point, pointB: Point, viewportId?: string) => void
   clearPendingCalibration: () => void
 
   // --- view (zoom/pan) ------------------------------------------------
@@ -166,6 +192,7 @@ function defaultLabel(type: MeasurementType, index: number): string {
     count: 'Count',
     radius: 'Radius',
     wall: 'Wall',
+    room: 'Room',
   }
   return `${names[type]} ${index}`
 }
@@ -185,12 +212,27 @@ export const useProjectStore = create<ProjectStoreState>((set, get) => ({
 
   activeTool: 'select',
   selectedMeasurementId: null,
+  selectedViewportId: null,
+  selectViewport: (id) => set({ selectedViewportId: id, selectedMeasurementId: id ? null : get().selectedMeasurementId }),
   draft: EMPTY_DRAFT,
   views: {},
   pendingCalibration: null,
   calibrationChooserOpen: false,
-  openCalibrationChooser: () => set({ calibrationChooserOpen: true }),
+  calibratingViewportId: null,
+  openCalibrationChooser: (viewportId) => set({ calibrationChooserOpen: true, calibratingViewportId: viewportId ?? null }),
   closeCalibrationChooser: () => set({ calibrationChooserOpen: false }),
+  startViewportCalibration: (viewportId) =>
+    set({
+      activeTool: 'calibrate',
+      draft: EMPTY_DRAFT,
+      selectedMeasurementId: null,
+      selectedViewportId: null,
+      calibrationChooserOpen: true,
+      calibratingViewportId: viewportId,
+      pendingCalibration: null,
+      pendingVerify: null,
+      cutoutTargetId: null,
+    }),
   pendingVerify: null,
   startVerifyPoints: (sheetId, pointA, pointB) => set({ pendingVerify: { sheetId, pointA, pointB } }),
   clearPendingVerify: () => set({ pendingVerify: null }),
@@ -326,6 +368,63 @@ export const useProjectStore = create<ProjectStoreState>((set, get) => ({
     commit(set, get, (p) => ({
       ...p,
       sheets: p.sheets.map((s) => (s.id === sheetId ? { ...s, calibration } : s)),
+    })),
+
+  renameSheet: (sheetId, name) =>
+    commit(set, get, (p) => ({
+      ...p,
+      sheets: p.sheets.map((s) => (s.id === sheetId ? { ...s, name } : s)),
+    })),
+
+  addViewport: (sheetId, pointA, pointB) =>
+    commit(set, get, (p) => {
+      const x = Math.min(pointA.x, pointB.x)
+      const y = Math.min(pointA.y, pointB.y)
+      const width = Math.abs(pointB.x - pointA.x)
+      const height = Math.abs(pointB.y - pointA.y)
+      if (width < 4 || height < 4) return p
+      return {
+        ...p,
+        sheets: p.sheets.map((s) => {
+          if (s.id !== sheetId) return s
+          const viewports = s.viewports ?? []
+          const viewport: Viewport = {
+            id: makeId(),
+            name: `Viewport ${viewports.length + 1}`,
+            bounds: { x, y, width, height },
+            calibration: null,
+          }
+          return { ...s, viewports: [...viewports, viewport] }
+        }),
+      }
+    }),
+
+  renameViewport: (sheetId, viewportId, name) =>
+    commit(set, get, (p) => ({
+      ...p,
+      sheets: p.sheets.map((s) =>
+        s.id === sheetId ? { ...s, viewports: (s.viewports ?? []).map((v) => (v.id === viewportId ? { ...v, name } : v)) } : s,
+      ),
+    })),
+
+  removeViewport: (sheetId, viewportId) => {
+    commit(set, get, (p) => ({
+      ...p,
+      sheets: p.sheets.map((s) =>
+        s.id === sheetId ? { ...s, viewports: (s.viewports ?? []).filter((v) => v.id !== viewportId) } : s,
+      ),
+    }))
+    if (get().selectedViewportId === viewportId) set({ selectedViewportId: null })
+  },
+
+  setViewportCalibration: (sheetId, viewportId, calibration) =>
+    commit(set, get, (p) => ({
+      ...p,
+      sheets: p.sheets.map((s) =>
+        s.id === sheetId
+          ? { ...s, viewports: (s.viewports ?? []).map((v) => (v.id === viewportId ? { ...v, calibration } : v)) }
+          : s,
+      ),
     })),
 
   addLayer: (name) => {
@@ -526,7 +625,7 @@ export const useProjectStore = create<ProjectStoreState>((set, get) => ({
       measurements: p.measurements.map((m) => (m.id === id ? { ...m, label, updatedAt: new Date().toISOString() } : m)),
     })),
 
-  selectMeasurement: (id) => set({ selectedMeasurementId: id }),
+  selectMeasurement: (id) => set({ selectedMeasurementId: id, selectedViewportId: id ? null : get().selectedViewportId }),
 
   // ------------------------------------------------------------------
   // Tool / draft state — deliberately outside the undo stack. Only the
@@ -537,7 +636,9 @@ export const useProjectStore = create<ProjectStoreState>((set, get) => ({
       activeTool: tool,
       draft: EMPTY_DRAFT,
       selectedMeasurementId: null,
+      selectedViewportId: null,
       calibrationChooserOpen: tool === 'calibrate',
+      calibratingViewportId: null,
       pendingCalibration: null,
       pendingVerify: null,
       cutoutTargetId: null,
@@ -621,6 +722,14 @@ export const useProjectStore = create<ProjectStoreState>((set, get) => ({
         center,
         radiusPx: Math.hypot(edge.x - center.x, edge.y - center.y),
       }
+    } else if (draft.tool === 'room' && draft.points.length >= 3) {
+      measurement = {
+        ...base,
+        type: 'room',
+        label: nextMeasurementLabel(project, layerId, 'room'),
+        points: draft.points,
+        heightM: 2.4,
+      }
     }
 
     set({ draft: EMPTY_DRAFT })
@@ -629,8 +738,9 @@ export const useProjectStore = create<ProjectStoreState>((set, get) => ({
     }
   },
 
-  startCalibrationPoints: (sheetId, pointA, pointB) => set({ pendingCalibration: { sheetId, pointA, pointB } }),
-  clearPendingCalibration: () => set({ pendingCalibration: null }),
+  startCalibrationPoints: (sheetId, pointA, pointB, viewportId) =>
+    set({ pendingCalibration: { sheetId, pointA, pointB, viewportId } }),
+  clearPendingCalibration: () => set({ pendingCalibration: null, calibratingViewportId: null }),
 
   setView: (sheetId, view) => set((s) => ({ views: { ...s.views, [sheetId]: view } })),
   getView: (sheetId) => get().views[sheetId] ?? IDENTITY_VIEW,

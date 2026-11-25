@@ -9,6 +9,7 @@ import { MeasurementShapes } from './MeasurementShapes'
 import { useElementSize } from './useElementSize'
 import { useSheetImage } from './useSheetImage'
 import { VertexHandles } from './VertexHandles'
+import { ViewportShapes } from './ViewportShapes'
 
 const MIN_SCALE = 0.05
 const MAX_SCALE = 20
@@ -36,7 +37,7 @@ function screenPointFromEvent(evt: MouseEvent | WheelEvent, container: HTMLEleme
 function collectSnapCandidates(measurements: Measurement[], draftPoints: Point[]): Point[] {
   const points: Point[] = [...draftPoints]
   for (const m of measurements) {
-    if (m.type === 'area' || m.type === 'length' || m.type === 'wall') points.push(...m.points)
+    if (m.type === 'area' || m.type === 'length' || m.type === 'wall' || m.type === 'room') points.push(...m.points)
     else if (m.type === 'radius') points.push(m.center)
     else if (m.type === 'count') points.push(...m.points)
   }
@@ -74,6 +75,10 @@ export function SheetCanvas({ sheet }: { sheet: Sheet }) {
   const openItemPresetsDialog = useProjectStore((s) => s.openItemPresetsDialog)
   const pendingFocusPoint = useProjectStore((s) => s.pendingFocusPoint)
   const clearPendingFocusPoint = useProjectStore((s) => s.clearPendingFocusPoint)
+  const addViewport = useProjectStore((s) => s.addViewport)
+  const calibratingViewportId = useProjectStore((s) => s.calibratingViewportId)
+  const selectedViewportId = useProjectStore((s) => s.selectedViewportId)
+  const selectViewport = useProjectStore((s) => s.selectViewport)
 
   const view = rawView ?? IDENTITY_VIEW
   const panMode = activeTool === 'pan' || spaceHeld
@@ -207,14 +212,26 @@ export function SheetCanvas({ sheet }: { sheet: Sheet }) {
     lastClickRef.current = { time: now, screenPoint }
 
     if (activeTool === 'select') {
-      if (clickedEmpty) selectMeasurement(null)
+      if (clickedEmpty) {
+        selectMeasurement(null)
+        selectViewport(null)
+      }
       return
     }
     if (activeTool === 'calibrate') {
       if (draft.points.length === 0) {
         beginDraft('calibrate', sheet.id, sheetPoint)
       } else {
-        startCalibrationPoints(sheet.id, draft.points[0], sheetPoint)
+        startCalibrationPoints(sheet.id, draft.points[0], sheetPoint, calibratingViewportId ?? undefined)
+        cancelDraft()
+      }
+      return
+    }
+    if (activeTool === 'viewport') {
+      if (draft.points.length === 0) {
+        beginDraft('viewport', sheet.id, sheetPoint)
+      } else {
+        addViewport(sheet.id, draft.points[0], sheetPoint)
         cancelDraft()
       }
       return
@@ -256,6 +273,16 @@ export function SheetCanvas({ sheet }: { sheet: Sheet }) {
       if (draft.points.length === 0) {
         beginDraft('wall', sheet.id, sheetPoint)
       } else if (draft.points.length >= 2 && isDoubleClick) {
+        commitDraft()
+      } else {
+        addDraftPoint(sheetPoint)
+      }
+      return
+    }
+    if (activeTool === 'room') {
+      if (draft.points.length === 0) {
+        beginDraft('room', sheet.id, sheetPoint)
+      } else if (draft.points.length >= 3 && (nearFirstPoint(sheetPoint) || isDoubleClick)) {
         commitDraft()
       } else {
         addDraftPoint(sheetPoint)
@@ -335,6 +362,15 @@ export function SheetCanvas({ sheet }: { sheet: Sheet }) {
         >
           <KonvaLayer>
             {image && <KonvaImage image={image} width={sheet.width} height={sheet.height} listening={false} />}
+          </KonvaLayer>
+          <KonvaLayer>
+            <ViewportShapes
+              viewports={sheet.viewports ?? []}
+              invScale={invScale}
+              selectedId={selectedViewportId}
+              selectable={activeTool === 'select'}
+              onSelect={selectViewport}
+            />
           </KonvaLayer>
           <KonvaLayer>
             {sortedLayers

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { computePixelsPerMetre, distance } from '../lib/coords'
 import { PRESET_SCALE_RATIOS, formatScaleRatio, pixelsPerMetreForScale } from '../lib/scales'
-import type { LengthUnit } from '../lib/types'
+import type { Calibration, LengthUnit } from '../lib/types'
 import { useProjectStore } from '../store/useProjectStore'
 
 export function CalibrationDialog() {
@@ -10,7 +10,9 @@ export function CalibrationDialog() {
   const clearPending = useProjectStore((s) => s.clearPendingCalibration)
   const chooserOpen = useProjectStore((s) => s.calibrationChooserOpen)
   const closeChooser = useProjectStore((s) => s.closeCalibrationChooser)
+  const calibratingViewportId = useProjectStore((s) => s.calibratingViewportId)
   const setCalibration = useProjectStore((s) => s.setCalibration)
+  const setViewportCalibration = useProjectStore((s) => s.setViewportCalibration)
   const setActiveTool = useProjectStore((s) => s.setActiveTool)
   const [realDistance, setRealDistance] = useState('')
   const [unit, setUnit] = useState<LengthUnit>('m')
@@ -19,6 +21,8 @@ export function CalibrationDialog() {
 
   const activeSheet = project?.sheets.find((s) => s.id === project.activeSheetId)
   const sourceDpi = activeSheet?.sourceDpi
+  const viewportId = pending?.viewportId ?? calibratingViewportId ?? undefined
+  const targetViewport = viewportId ? activeSheet?.viewports?.find((v) => v.id === viewportId) : undefined
 
   function closeEverything() {
     clearPending()
@@ -26,10 +30,15 @@ export function CalibrationDialog() {
     setRealDistance('')
   }
 
+  function writeCalibration(sheetId: string, calibration: Calibration) {
+    if (viewportId) setViewportCalibration(sheetId, viewportId, calibration)
+    else setCalibration(sheetId, calibration)
+  }
+
   function applyPreset(scaleRatio: number) {
     const sheetId = pending?.sheetId ?? activeSheet?.id
     if (!sheetId || !sourceDpi) return
-    setCalibration(sheetId, {
+    writeCalibration(sheetId, {
       pointA: pending?.pointA ?? { x: 0, y: 0 },
       pointB: pending?.pointB ?? { x: 0, y: 0 },
       realDistance: 1,
@@ -46,7 +55,7 @@ export function CalibrationDialog() {
     const parsed = Number.parseFloat(realDistance)
     if (!Number.isFinite(parsed) || parsed <= 0) return
     const pixelsPerMetre = computePixelsPerMetre(pending.pointA, pending.pointB, parsed, unit)
-    setCalibration(pending.sheetId, {
+    writeCalibration(pending.sheetId, {
       pointA: pending.pointA,
       pointB: pending.pointB,
       realDistance: parsed,
@@ -64,7 +73,9 @@ export function CalibrationDialog() {
   return (
     <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/50">
       <div className="w-96 rounded-lg border border-[#2a2d35] bg-[#1c1f27] p-4 shadow-xl">
-        <h2 className="mb-1 text-sm font-semibold text-[#e4e7ec]">Calibrate scale</h2>
+        <h2 className="mb-1 text-sm font-semibold text-[#e4e7ec]">
+          Calibrate scale{targetViewport && <span className="text-[#2dd4bf]"> — {targetViewport.name}</span>}
+        </h2>
 
         {/* --- Preset architectural scale, no clicking required ------------- */}
         <div className="mb-3">

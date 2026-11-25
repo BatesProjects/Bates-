@@ -10,7 +10,7 @@ function flatten(points: Point[]): number[] {
 }
 
 function extractPoints(m: Measurement): Point[] {
-  if (m.type === 'area' || m.type === 'length' || m.type === 'wall') return m.points
+  if (m.type === 'area' || m.type === 'length' || m.type === 'wall' || m.type === 'room') return m.points
   if (m.type === 'radius') return [m.center, { x: m.center.x + m.radiusPx, y: m.center.y }]
   if (m.type === 'count') return m.points
   return []
@@ -27,7 +27,7 @@ export function VertexHandles({ measurement, invScale, color }: { measurement: M
   }
 
   function commit(nextPoints: Point[]) {
-    if (measurement.type === 'area' || measurement.type === 'length' || measurement.type === 'wall') {
+    if (measurement.type === 'area' || measurement.type === 'length' || measurement.type === 'wall' || measurement.type === 'room') {
       updateMeasurement(measurement.id, { points: nextPoints } as Partial<Measurement>)
     } else if (measurement.type === 'radius') {
       const [center, edge] = nextPoints
@@ -58,14 +58,14 @@ export function VertexHandles({ measurement, invScale, color }: { measurement: M
     commit(points)
   }
 
-  const showOutline = measurement.type === 'area' || measurement.type === 'length' || measurement.type === 'wall'
+  const showOutline = measurement.type === 'area' || measurement.type === 'length' || measurement.type === 'wall' || measurement.type === 'room'
 
   return (
     <>
       {showOutline && (
         <Line
           points={flatten(points)}
-          closed={measurement.type === 'area'}
+          closed={measurement.type === 'area' || measurement.type === 'room'}
           stroke="#ffffff"
           strokeWidth={1 * invScale}
           dash={[4 * invScale, 4 * invScale]}

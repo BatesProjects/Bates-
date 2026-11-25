@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx'
 import { computeResult } from './measure'
-import { buildItemSummary, buildSummary } from './summary'
+import { buildItemSummary, buildRoomSummary, buildSummary } from './summary'
 import type { ItemPreset, Project } from './types'
 
 function round(n: number | undefined, digits = 2): number | '' {
@@ -93,6 +93,39 @@ export function exportWorkbook(project: Project, itemPresets: ItemPreset[] = [])
     XLSX.utils.book_append_sheet(wb, itemsSheet, 'Items')
   }
 
+  // --- Rooms tab: one row per room, with every derived quantity -----------
+  const roomSummary = buildRoomSummary(project)
+  if (roomSummary.length > 0) {
+    const roomRows: (string | number)[][] = [
+      ['Room', 'Sheet', 'Layer', 'Ceiling height (m)', 'Floor area (m²)', 'Ceiling area (m²)', 'Perimeter (m)', 'Wall area (m²)'],
+    ]
+    let totalFloor = 0
+    let totalCeiling = 0
+    let totalPerimeter = 0
+    let totalWall = 0
+    for (const row of roomSummary) {
+      roomRows.push([
+        row.measurement.label,
+        row.sheetName,
+        row.layerName,
+        round(row.heightM),
+        round(row.floorAreaM2),
+        round(row.ceilingAreaM2),
+        round(row.perimeterM),
+        round(row.wallAreaM2),
+      ])
+      totalFloor += row.floorAreaM2
+      totalCeiling += row.ceilingAreaM2
+      totalPerimeter += row.perimeterM
+      totalWall += row.wallAreaM2
+    }
+    roomRows.push([])
+    roomRows.push(['TOTAL', '', '', '', round(totalFloor), round(totalCeiling), round(totalPerimeter), round(totalWall)])
+    const roomsSheet = XLSX.utils.aoa_to_sheet(roomRows)
+    roomsSheet['!cols'] = [{ wch: 20 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 14 }, { wch: 16 }, { wch: 14 }, { wch: 14 }]
+    XLSX.utils.book_append_sheet(wb, roomsSheet, 'Rooms')
+  }
+
   // --- Raw measurements tab: one row per measurement ----------------------
   const header = [
     'Sheet',
@@ -105,6 +138,7 @@ export function exportWorkbook(project: Project, itemPresets: ItemPreset[] = [])
     'Width (m)',
     'Height (m)',
     'Area (m²)',
+    'Ceiling area (m²)',
     'Perimeter (m)',
     'Depth (m)',
     'Volume (m³)',
@@ -138,16 +172,17 @@ export function exportWorkbook(project: Project, itemPresets: ItemPreset[] = [])
       preset?.costCode ?? '',
       m.type === 'length' || m.type === 'wall' ? round(result.lengthM) : m.type === 'radius' ? round(result.lengthM) : '',
       m.type === 'length' ? round(m.width) : '',
-      m.type === 'wall' ? round(m.heightM) : m.type === 'count' ? round(m.heightM) : '',
-      m.type === 'area' || m.type === 'length' || m.type === 'radius' || m.type === 'wall' ? round(result.areaM2) : '',
-      m.type === 'area' ? round(result.perimeterM) : '',
+      m.type === 'wall' || m.type === 'room' ? round(m.heightM) : m.type === 'count' ? round(m.heightM) : '',
+      m.type === 'area' || m.type === 'length' || m.type === 'radius' || m.type === 'wall' || m.type === 'room' ? round(result.areaM2) : '',
+      m.type === 'room' ? round(result.ceilingAreaM2) : '',
+      m.type === 'area' || m.type === 'room' ? round(result.perimeterM) : '',
       m.type === 'area' ? round(m.depth) : '',
       m.type === 'area' ? round(result.volumeM3) : '',
       m.type === 'radius' ? round(result.lengthM) : '',
       m.type === 'area' ? round(m.pitchDeg) : '',
       m.type === 'area' ? round(result.planAreaM2) : '',
       m.type === 'area' ? round(result.cutoutAreaM2) : '',
-      m.type === 'wall' ? round(result.grossAreaM2) : '',
+      m.type === 'wall' || m.type === 'room' ? round(result.grossAreaM2) : '',
       m.type === 'wall' ? round(result.openingsAreaM2) : '',
       m.type === 'count' ? result.count ?? '' : '',
       m.type === 'count' && result.countWithWaste !== undefined ? result.countWithWaste : '',

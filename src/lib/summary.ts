@@ -57,6 +57,14 @@ function addInto(totals: LayerSummary['totals'], result: MeasurementResult) {
     totals.areaM2 += result.areaM2 ?? 0
     totals.lengthM += result.lengthM ?? 0
     totals.areaM2WithWaste += result.areaM2WithWaste ?? result.areaM2 ?? 0
+  } else if (result.measurement.type === 'room') {
+    // Floor area and perimeter (skirting/cornice run) join the general area/length
+    // totals; ceiling and wall area are room-specific and shown on the room itself
+    // and in the XLSX Rooms tab only, so they're not double-counted here.
+    totals.areaM2 += result.areaM2 ?? 0
+    totals.lengthM += result.lengthM ?? 0
+    totals.areaM2WithWaste += result.areaM2WithWaste ?? result.areaM2 ?? 0
+    totals.lengthMWithWaste += result.lengthMWithWaste ?? result.lengthM ?? 0
   }
 }
 
@@ -127,4 +135,38 @@ export function buildItemSummary(project: Project, itemPresets: ItemPreset[]): I
   }
 
   return rows.sort((a, b) => a.preset.name.localeCompare(b.preset.name))
+}
+
+/** One row per room measurement, with every derived quantity, for the "Rooms" XLSX tab. */
+export interface RoomSummaryRow {
+  measurement: Measurement & { type: 'room' }
+  sheetName: string
+  layerName: string
+  floorAreaM2: number
+  ceilingAreaM2: number
+  perimeterM: number
+  wallAreaM2: number
+  heightM: number
+}
+
+export function buildRoomSummary(project: Project): RoomSummaryRow[] {
+  const sheetsById = new Map(project.sheets.map((s) => [s.id, s]))
+  const layersById = new Map(project.layers.map((l) => [l.id, l]))
+
+  return project.measurements
+    .filter((m): m is Measurement & { type: 'room' } => m.type === 'room')
+    .map((m) => {
+      const layer = layersById.get(m.layerId)
+      const result = computeResult(m, sheetsById.get(m.sheetId), layer)
+      return {
+        measurement: m,
+        sheetName: sheetsById.get(m.sheetId)?.name ?? '—',
+        layerName: layer?.name ?? '—',
+        floorAreaM2: result.areaM2 ?? 0,
+        ceilingAreaM2: result.ceilingAreaM2 ?? 0,
+        perimeterM: result.perimeterM ?? 0,
+        wallAreaM2: result.grossAreaM2 ?? 0,
+        heightM: m.heightM,
+      }
+    })
 }

@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import { useSheetImage } from '../canvas/useSheetImage'
+import { formatScaleRatio } from '../lib/scales'
 import type { Sheet } from '../lib/types'
 
 export function SheetThumbnail({
@@ -6,13 +8,17 @@ export function SheetThumbnail({
   active,
   onClick,
   onDelete,
+  onRename,
 }: {
   sheet: Sheet
   active: boolean
   onClick: () => void
   onDelete: () => void
+  onRename: (name: string) => void
 }) {
   const image = useSheetImage(sheet.imageBlobKey)
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
 
   return (
     <div
@@ -28,10 +34,47 @@ export function SheetThumbnail({
           <div className="text-[10px] text-[#4a4f5c]">Loading…</div>
         )}
       </div>
-      <div className="mt-1 truncate text-[10px] leading-tight text-[#aab0bb]" title={sheet.name}>
-        {sheet.name}
-      </div>
-      {!sheet.calibration && (
+      {editing ? (
+        <input
+          autoFocus
+          className="mt-1 w-full rounded bg-[#14161b] px-1 text-[10px] text-[#e4e7ec] outline-none ring-1 ring-[#5b8def]"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onClick={(e) => e.stopPropagation()}
+          onBlur={() => {
+            if (draft.trim()) onRename(draft.trim())
+            setEditing(false)
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') e.currentTarget.blur()
+            if (e.key === 'Escape') setEditing(false)
+          }}
+        />
+      ) : (
+        <div
+          className="mt-1 truncate text-[10px] leading-tight text-[#aab0bb]"
+          title={`${sheet.name} (double-click to rename)`}
+          onDoubleClick={(e) => {
+            e.stopPropagation()
+            setDraft(sheet.name)
+            setEditing(true)
+          }}
+        >
+          {sheet.name}
+        </div>
+      )}
+      {sheet.calibration ? (
+        <div
+          title={
+            sheet.calibration.scaleRatio
+              ? `Calibrated at ${formatScaleRatio(sheet.calibration.scaleRatio)}`
+              : 'Calibrated'
+          }
+          className="absolute left-1 top-1 rounded bg-[#163a22] px-1 text-[9px] font-medium text-[#5fcf80]"
+        >
+          {sheet.calibration.scaleRatio ? formatScaleRatio(sheet.calibration.scaleRatio) : 'cal'}
+        </div>
+      ) : (
         <div className="absolute left-1 top-1 rounded bg-[#3a2a10] px-1 text-[9px] font-medium text-[#e8a53d]">
           uncal
         </div>

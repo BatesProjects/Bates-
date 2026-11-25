@@ -182,6 +182,43 @@ export function MeasurementShapes({
           )
         }
 
+        if (m.type === 'room') {
+          const centroid = m.points.reduce((a, p) => ({ x: a.x + p.x / m.points.length, y: a.y + p.y / m.points.length }), { x: 0, y: 0 })
+          return (
+            <Group key={m.id}>
+              <Line
+                points={flatten(m.points)}
+                closed
+                fill={hexToRgba(layer.color, selected ? 0.24 : 0.1)}
+                stroke={layer.color}
+                strokeWidth={(selected ? 2.5 : 1.5) * invScale}
+                onClick={onClick}
+                onTap={onClick}
+                listening={selectable}
+              />
+              <Line
+                points={flatten(m.points)}
+                closed
+                stroke={layer.color}
+                strokeWidth={1 * invScale}
+                dash={[3 * invScale, 3 * invScale]}
+                listening={false}
+              />
+              <Text
+                x={centroid.x}
+                y={centroid.y}
+                text={`${m.label}\n${fmt(result.areaM2)} m² · h=${m.heightM}m`}
+                fontSize={12 * invScale}
+                fill="#e4e7ec"
+                align="center"
+                offsetX={32 * invScale}
+                offsetY={12 * invScale}
+                listening={false}
+              />
+            </Group>
+          )
+        }
+
         if (m.type === 'radius') {
           return (
             <Group key={m.id}>

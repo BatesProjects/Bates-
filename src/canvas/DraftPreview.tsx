@@ -1,4 +1,4 @@
-import { Circle, Label, Line, Tag, Text } from 'react-konva'
+import { Circle, Label, Line, Rect, Tag, Text } from 'react-konva'
 import { distance, findSnapTarget, polylineLengthPx, pxToM } from '../lib/coords'
 import type { Point } from '../lib/types'
 
@@ -37,7 +37,7 @@ export function DraftPreview({
   snapCandidates = [],
   snapRadiusSheetPx = 0,
 }: {
-  tool: 'area' | 'length' | 'radius' | 'calibrate' | 'verify' | 'count' | 'wall' | 'select' | 'pan'
+  tool: 'area' | 'length' | 'radius' | 'calibrate' | 'verify' | 'count' | 'wall' | 'room' | 'viewport' | 'select' | 'pan'
   points: Point[]
   cursor: Point | null
   color: string
@@ -55,22 +55,23 @@ export function DraftPreview({
     <Circle x={cursor.x} y={cursor.y} radius={9 * invScale} stroke="#4ade80" strokeWidth={1.5 * invScale} listening={false} />
   )
 
-  if (tool === 'area' || tool === 'length' || tool === 'wall') {
+  if (tool === 'area' || tool === 'length' || tool === 'wall' || tool === 'room') {
     const previewPoints = cursor ? [...points, cursor] : points
     const lastPoint = points[points.length - 1]
     const currentSegmentPx = cursor ? distance(lastPoint, cursor) : 0
     const runningTotalPx = polylineLengthPx(points) + currentSegmentPx
     const labelAnchor = cursor ? { x: (lastPoint.x + cursor.x) / 2, y: (lastPoint.y + cursor.y) / 2 } : null
+    const closed = (tool === 'area' || tool === 'room') && points.length >= 2
 
     return (
       <>
         <Line
           points={flatten(previewPoints)}
-          closed={tool === 'area' && points.length >= 2}
+          closed={closed}
           stroke={color}
-          strokeWidth={(tool === 'area' ? 2 : tool === 'wall' ? 4 : 2.5) * invScale}
+          strokeWidth={(tool === 'area' || tool === 'room' ? 2 : tool === 'wall' ? 4 : 2.5) * invScale}
           dash={[6 * invScale, 4 * invScale]}
-          fill={tool === 'area' ? hexToRgba(color, 0.12) : undefined}
+          fill={tool === 'area' || tool === 'room' ? hexToRgba(color, 0.12) : undefined}
           lineCap="round"
           listening={false}
         />
@@ -109,6 +110,37 @@ export function DraftPreview({
           />
         )}
         {snapRing}
+      </>
+    )
+  }
+
+  if (tool === 'viewport') {
+    const a = points[0]
+    const b = cursor ?? a
+    const x = Math.min(a.x, b.x)
+    const y = Math.min(a.y, b.y)
+    const width = Math.abs(b.x - a.x)
+    const height = Math.abs(b.y - a.y)
+    return (
+      <>
+        <Rect
+          x={x}
+          y={y}
+          width={width}
+          height={height}
+          stroke="#2dd4bf"
+          strokeWidth={2 * invScale}
+          dash={[8 * invScale, 5 * invScale]}
+          fill="rgba(45, 212, 191, 0.08)"
+          listening={false}
+        />
+        {cursor && width > 0 && height > 0 && (
+          <LiveLabel
+            at={{ x: b.x + 10 * invScale, y: b.y - 20 * invScale }}
+            text={`${fmtDist(width, pixelsPerMetre)} × ${fmtDist(height, pixelsPerMetre)}`}
+            invScale={invScale}
+          />
+        )}
       </>
     )
   }
